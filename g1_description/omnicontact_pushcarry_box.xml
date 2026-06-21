@@ -1,0 +1,102 @@
+<mujoco model="carrybox scene">
+    <include file="g1_29dof.xml" />
+    <include file="g1_ghost.xml" />
+    <statistic center="1.0 0.7 1.0" extent="0.8" />
+    <visual>
+        <headlight diffuse="0.6 0.6 0.6" ambient="0.1 0.1 0.1" specular="0.9 0.9 0.9" />
+        <rgba haze="0.15 0.25 0.35 1" />
+        <global azimuth="-140" elevation="-20" />
+    </visual>
+    <asset>
+        <texture type="skybox" builtin="flat" rgb1="0 0 0" rgb2="0 0 0" width="512" height="3072" />
+        <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3" markrgb="0.8 0.8 0.8" width="300" height="300" />
+        <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2" />
+    </asset>
+    <default>
+        <default class="table_plane">
+            <geom type="box" size="0.2 0.2 0.01" friction="1.0 0.02 0.001" contype="2" conaffinity="4" />
+        </default>
+        <default class="reference_visual">
+            <geom rgba="1 1 0 0.7" contype="0" conaffinity="0" group="1" density="0" />
+        </default>
+        <default class="ghost_visual">
+            <geom type="box" size="0.15 0.15 0.15" contype="0" conaffinity="0" group="1" />
+        </default>
+    </default>
+    <worldbody>
+        <light pos="1 0 3.5" dir="0 0 -1" directional="true" />
+        <geom name="floor" size="0 0 0.05" type="plane" material="groundplane" friction="1.0 0.02 0.001" />
+        <body name="push_box" pos="1 0 0.26" quat="1 0 0 0">
+            <freejoint name="push_box" />
+            <inertial pos="0 0 0" mass="8" diaginertia="0.02 0.02 0.02" />
+            <geom name="push_box_geom_bottom" type="box" pos="0 0 -0.19" size="0.23 0.25 0.03" rgba="0.8 0.6 0.4 1" friction="0.5 0.02 0.001" contype="4" conaffinity="3" />
+            <geom name="push_box_geom_top" type="box" pos="0 0 0.05" size="0.23 0.25 0.21" rgba="0.8 0.6 0.4 1" friction="0.5 0.02 0.001" contype="4" conaffinity="3" />
+            <body name="push_box_caster_front_left" pos="0.14 0.16 -0.225">
+                <inertial pos="0 0 0" mass="0.02" diaginertia="0.00001 0.00001 0.00001" />
+                <joint name="push_box_caster_front_left_swivel_joint" type="hinge" axis="0 0 1" damping="0.005" armature="0.0001" />
+                <body name="push_box_caster_front_left_wheel" pos="-0.05 0 0">
+                    <joint name="push_box_caster_front_left_wheel_joint" type="hinge" axis="0 1 0" damping="0.02" armature="0.001" />
+                    <geom name="push_box_caster_front_left_wheel_geom" type="cylinder" size="0.035 0.025" quat="0.7071068 0.7071068 0 0" rgba="0.06 0.06 0.06 1" friction="1.2 0.004 0.0001" contype="4" conaffinity="3" />
+                </body>
+            </body>
+            <body name="push_box_caster_front_right" pos="0.14 -0.16 -0.225">
+                <inertial pos="0 0 0" mass="0.02" diaginertia="0.00001 0.00001 0.00001" />
+                <joint name="push_box_caster_front_right_swivel_joint" type="hinge" axis="0 0 1" damping="0.005" armature="0.0001" />
+                <body name="push_box_caster_front_right_wheel" pos="-0.05 0 0">
+                    <joint name="push_box_caster_front_right_wheel_joint" type="hinge" axis="0 1 0" damping="0.02" armature="0.001" />
+                    <geom name="push_box_caster_front_right_wheel_geom" type="cylinder" size="0.035 0.025" quat="0.7071068 0.7071068 0 0" rgba="0.06 0.06 0.06 1" friction="1.2 0.004 0.0001" contype="4" conaffinity="3" />
+                </body>
+            </body>
+            <body name="push_box_caster_rear_left" pos="-0.14 0.16 -0.225">
+                <inertial pos="0 0 0" mass="0.02" diaginertia="0.00001 0.00001 0.00001" />
+                <joint name="push_box_caster_rear_left_swivel_joint" type="hinge" axis="0 0 1" damping="0.005" armature="0.0001" />
+                <body name="push_box_caster_rear_left_wheel" pos="-0.05 0 0">
+                    <joint name="push_box_caster_rear_left_wheel_joint" type="hinge" axis="0 1 0" damping="0.02" armature="0.001" />
+                    <geom name="push_box_caster_rear_left_wheel_geom" type="cylinder" size="0.035 0.025" quat="0.7071068 0.7071068 0 0" rgba="0.06 0.06 0.06 1" friction="1.2 0.004 0.0001" contype="4" conaffinity="3" />
+                </body>
+            </body>
+            <body name="push_box_caster_rear_right" pos="-0.14 -0.16 -0.225">
+                <inertial pos="0 0 0" mass="0.02" diaginertia="0.00001 0.00001 0.00001" />
+                <joint name="push_box_caster_rear_right_swivel_joint" type="hinge" axis="0 0 1" damping="0.005" armature="0.0001" />
+                <body name="push_box_caster_rear_right_wheel" pos="-0.05 0 0">
+                    <joint name="push_box_caster_rear_right_wheel_joint" type="hinge" axis="0 1 0" damping="0.02" armature="0.001" />
+                    <geom name="push_box_caster_rear_right_wheel_geom" type="cylinder" size="0.035 0.025" quat="0.7071068 0.7071068 0 0" rgba="0.06 0.06 0.06 1" friction="1.2 0.004 0.0001" contype="4" conaffinity="3" />
+                </body>
+            </body>
+        </body>
+        <body name="carry_box" pos="2.2 -0.8 0.15" quat="1 0 0 0">
+            <freejoint name="carry_box_joint" />
+            <inertial pos="0 0 0" mass="2" diaginertia="0.005 0.005 0.005" />
+            <geom name="carry_box_geom" type="box" size="0.15 0.15 0.15" rgba="0.75 0.5 0.2 1" friction="0.5 0.02 0.001" contype="4" conaffinity="3" />
+        </body>
+        <body name="plane_1_holder" mocap="true" pos="1 1 0.6">
+            <geom name="plane_1" class="table_plane" rgba="0.7 0 0 1" />
+        </body>
+        <body name="plane_2_holder" mocap="true" pos="1 1 0.4">
+            <geom name="plane_2" class="table_plane" rgba="0 0.7 0 1" />
+        </body>
+        <body name="ghost_push_box">
+            <freejoint name="ghost_push_box_joint" />
+            <geom name="ghost_push_box_geom" type="box" size="0.23 0.25 0.26" rgba="0.9 0.3 0 0.7" contype="0" conaffinity="0" group="1" />
+        </body>
+        <body name="ghost_carry_box">
+            <freejoint name="ghost_carry_box_joint" />
+            <geom name="ghost_carry_box_geom" type="box" size="0.15 0.15 0.15" rgba="0.9 0.3 0 0.7" contype="0" conaffinity="0" group="1" />
+        </body>
+        <body name="ref_l_wrist_frame" mocap="true">
+            <geom name="ref_l_rubber_hand" class="reference_visual" type="mesh" mesh="left_rubber_hand" pos="0.0415 0.003 0" />
+        </body>
+        <body name="ref_r_wrist_frame" mocap="true">
+            <geom name="ref_r_rubber_hand" class="reference_visual" type="mesh" mesh="right_rubber_hand" pos="0.0415 -0.003 0" />
+        </body>
+        <body name="ref_torso_frame" mocap="true">
+            <geom name="ref_torso_mesh" class="reference_visual" type="mesh" mesh="torso_link" />
+        </body>
+        <body name="ref_l_ankle_frame" mocap="true">
+            <geom name="ref_l_ankle_mesh" class="reference_visual" type="mesh" mesh="right_ankle_roll_link" />
+        </body>
+        <body name="ref_r_ankle_frame" mocap="true">
+            <geom name="ref_r_ankle_mesh" class="reference_visual" type="mesh" mesh="right_ankle_roll_link" />
+        </body>
+    </worldbody>
+</mujoco>

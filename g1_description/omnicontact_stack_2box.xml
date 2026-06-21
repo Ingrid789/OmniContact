@@ -1,0 +1,69 @@
+<mujoco model="stackbox 2 scene">
+    <include file="g1_29dof.xml" />
+    <include file="g1_ghost.xml" />
+    <statistic center="1.0 0.7 1.0" extent="0.8" />
+    <visual>
+        <headlight diffuse="0.6 0.6 0.6" ambient="0.1 0.1 0.1" specular="0.9 0.9 0.9" />
+        <rgba haze="0.15 0.25 0.35 1" />
+        <global azimuth="-140" elevation="-20" />
+    </visual>
+    <asset>
+        <texture type="skybox" builtin="flat" rgb1="0 0 0" rgb2="0 0 0" width="512" height="3072" />
+        <texture type="2d" name="groundplane" builtin="checker" mark="edge" rgb1="0.2 0.3 0.4" rgb2="0.1 0.2 0.3" markrgb="0.8 0.8 0.8" width="300" height="300" />
+        <material name="groundplane" texture="groundplane" texuniform="true" texrepeat="5 5" reflectance="0.2" />
+    </asset>
+    <default>
+        <default class="table_plane">
+            <geom type="box" size="0.2 0.2 0.01" friction="1.0 0.02 0.001" contype="2" conaffinity="4" />
+        </default>
+        <default class="reference_visual">
+            <geom rgba="1 1 0 0.7" contype="0" conaffinity="0" group="1" density="0" />
+        </default>
+        <default class="ghost_visual">
+            <geom type="box" size="0.15 0.15 0.15" contype="0" conaffinity="0" group="1" />
+        </default>
+    </default>
+    <worldbody>
+        <light pos="1 0 3.5" dir="0 0 -1" directional="true" />
+        <geom name="floor" size="0 0 0.05" type="plane" material="groundplane" friction="1.0 0.02 0.001" />
+        <body name="stack_box_large" pos="-1.0 0.7 0.15" quat="1 0 0 0">
+            <freejoint name="stack_box_large_joint" />
+            <inertial pos="0 0 0" mass="2" diaginertia="0.01 0.01 0.01" />
+            <geom name="stack_box_large_geom" type="box" size="0.20 0.20 0.15" rgba="0.8 0.6 0.4 1" friction="0.7 0.02 0.001" />
+        </body>
+        <body name="stack_box_mid" pos="0.0 -1.0 0.15" quat="1 0 0 0">
+            <freejoint name="stack_box_mid_joint" />
+            <inertial pos="0 0 0" mass="2" diaginertia="0.005 0.005 0.005" />
+            <geom name="stack_box_mid_geom" type="box" size="0.15 0.15 0.15" rgba="0.75 0.5 0.2 1" friction="0.7 0.02 0.001" />
+        </body>
+        <body name="plane_1_holder" mocap="true" pos="1 1 0.6">
+            <geom name="plane_1" class="table_plane" rgba="0.7 0 0 1" />
+        </body>
+        <body name="plane_2_holder" mocap="true" pos="1 1 0.4">
+            <geom name="plane_2" class="table_plane" rgba="0 0.7 0 1" />
+        </body>
+        <body name="ghost_stack_box_large">
+            <freejoint name="ghost_stack_box_large_joint" />
+            <geom name="ghost_stack_box_large_geom" type="box" size="0.20 0.20 0.15" rgba="0.9 0.3 0 0.7" contype="0" conaffinity="0" group="1" />
+        </body>
+        <body name="ghost_stack_box_mid">
+            <freejoint name="ghost_stack_box_mid_joint" />
+            <geom name="ghost_stack_box_mid_geom" type="box" size="0.15 0.15 0.15" rgba="0.9 0.45 0 0.7" contype="0" conaffinity="0" group="1" />
+        </body>
+        <body name="ref_l_wrist_frame" mocap="true">
+            <geom name="ref_l_rubber_hand" class="reference_visual" type="mesh" mesh="left_rubber_hand" pos="0.0415 0.003 0" />
+        </body>
+        <body name="ref_r_wrist_frame" mocap="true">
+            <geom name="ref_r_rubber_hand" class="reference_visual" type="mesh" mesh="right_rubber_hand" pos="0.0415 -0.003 0" />
+        </body>
+        <body name="ref_torso_frame" mocap="true">
+            <geom name="ref_torso_mesh" class="reference_visual" type="mesh" mesh="torso_link" />
+        </body>
+        <body name="ref_l_ankle_frame" mocap="true">
+            <geom name="ref_l_ankle_mesh" class="reference_visual" type="mesh" mesh="right_ankle_roll_link" />
+        </body>
+        <body name="ref_r_ankle_frame" mocap="true">
+            <geom name="ref_r_ankle_mesh" class="reference_visual" type="mesh" mesh="right_ankle_roll_link" />
+        </body>
+    </worldbody>
+</mujoco>

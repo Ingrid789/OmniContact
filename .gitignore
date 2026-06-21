@@ -1,0 +1,47 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# IDE and OS noise
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs and run outputs
+*.log
+logs/
+runs/
+wandb/
+outputs/
+results/
+checkpoints/
+
+# Large local assets
+*.onnx
+*.pt
+*.pth
+*.ckpt
+*.npz
+*.npy
+
+# Local datasets and generated media
+data/
+videos/
+recordings/
+screenshots/
+
+# Keep personal Codex state out of commits
+.codex
+.codex/

@@ -1,0 +1,137 @@
+<mujoco model="g1_ghost">
+<worldbody>
+<body name="ghost_pelvis" pos="0 0 0.793">
+  <joint name="ghost_floating_base_joint" type="free"/>
+  <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+  <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+  
+  <!-- 左腿 -->
+  <body name="ghost_left_hip_pitch_link" pos="0 0.064452 -0.1027">
+    <joint name="ghost_left_hip_pitch_joint" axis="0 1 0" range="-2.5307 2.8798"/>
+    <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+    <body name="ghost_left_hip_roll_link" pos="0 0.052 -0.030465" quat="0.996179 0 -0.0873386 0">
+      <joint name="ghost_left_hip_roll_joint" axis="1 0 0" range="-0.5236 2.9671"/>
+      <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+      <body name="ghost_left_hip_yaw_link" pos="0.025001 0 -0.12412">
+        <joint name="ghost_left_hip_yaw_joint" axis="0 0 1" range="-2.7576 2.7576"/>
+        <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+        <body name="ghost_left_knee_link" pos="-0.078273 0.0021489 -0.17734" quat="0.996179 0 0.0873386 0">
+          <joint name="ghost_left_knee_joint" axis="0 1 0" range="-0.087267 2.8798"/>
+          <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+          <body name="ghost_left_ankle_pitch_link" pos="0 -9.4445e-05 -0.30001">
+            <joint name="ghost_left_ankle_pitch_joint" axis="0 1 0" range="-0.87267 0.5236"/>
+            <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+            <body name="ghost_left_ankle_roll_link" pos="0 0 -0.017558">
+              <joint name="ghost_left_ankle_roll_joint" axis="1 0 0" range="-0.2618 0.2618"/>
+              <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </body>
+
+  <!-- 右腿 -->
+  <body name="ghost_right_hip_pitch_link" pos="0 -0.064452 -0.1027">
+    <joint name="ghost_right_hip_pitch_joint" axis="0 1 0" range="-2.5307 2.8798"/>
+    <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+    <body name="ghost_right_hip_roll_link" pos="0 -0.052 -0.030465" quat="0.996179 0 -0.0873386 0">
+      <joint name="ghost_right_hip_roll_joint" axis="1 0 0" range="-2.9671 0.5236"/>
+      <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+      <body name="ghost_right_hip_yaw_link" pos="0.025001 0 -0.12412">
+        <joint name="ghost_right_hip_yaw_joint" axis="0 0 1" range="-2.7576 2.7576"/>
+        <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+        <body name="ghost_right_knee_link" pos="-0.078273 -0.0021489 -0.17734" quat="0.996179 0 0.0873386 0">
+          <joint name="ghost_right_knee_joint" axis="0 1 0" range="-0.087267 2.8798"/>
+          <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+          <body name="ghost_right_ankle_pitch_link" pos="0 9.4445e-05 -0.30001">
+            <joint name="ghost_right_ankle_pitch_joint" axis="0 1 0" range="-0.87267 0.5236"/>
+            <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+            <body name="ghost_right_ankle_roll_link" pos="0 0 -0.017558">
+              <joint name="ghost_right_ankle_roll_joint" axis="1 0 0" range="-0.2618 0.2618"/>
+              <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </body>
+
+  <!-- 躯干与手臂 -->
+  <body name="ghost_waist_yaw_link">
+    <joint name="ghost_waist_yaw_joint" axis="0 0 1" range="-2.618 2.618"/>
+    <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+    <body name="ghost_waist_roll_link" pos="-0.0039635 0 0.044">
+      <joint name="ghost_waist_roll_joint" axis="1 0 0" range="-0.52 0.52"/>
+      <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+      <body name="ghost_torso_link">
+        <joint name="ghost_waist_pitch_joint" axis="0 1 0" range="-0.52 0.52"/>
+        <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+        
+        <!-- 左臂 -->
+        <body name="ghost_left_shoulder_pitch_link" pos="0.0039563 0.10022 0.24778" quat="0.990264 0.139201 1.38722e-05 -9.86868e-05">
+          <joint name="ghost_left_shoulder_pitch_joint" axis="0 1 0" range="-3.0892 2.6704"/>
+          <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+          <body name="ghost_left_shoulder_roll_link" pos="0 0.038 -0.013831" quat="0.990268 -0.139172 0 0">
+            <joint name="ghost_left_shoulder_roll_joint" axis="1 0 0" range="-1.5882 2.2515"/>
+            <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+            <body name="ghost_left_shoulder_yaw_link" pos="0 0.00624 -0.1032">
+              <joint name="ghost_left_shoulder_yaw_joint" axis="0 0 1" range="-2.618 2.618"/>
+              <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+              <body name="ghost_left_elbow_link" pos="0.015783 0 -0.080518">
+                <joint name="ghost_left_elbow_joint" axis="0 1 0" range="-1.0472 2.0944"/>
+                <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+                <body name="ghost_left_wrist_roll_link" pos="0.1 0.00188791 -0.01">
+                  <joint name="ghost_left_wrist_roll_joint" axis="1 0 0" range="-1.97222 1.97222"/>
+                  <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+                  <body name="ghost_left_wrist_pitch_link" pos="0.038 0 0">
+                    <joint name="ghost_left_wrist_pitch_joint" axis="0 1 0" range="-1.61443 1.61443"/>
+                    <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+                    <body name="ghost_left_wrist_yaw_link" pos="0.046 0 0">
+                      <joint name="ghost_left_wrist_yaw_joint" axis="0 0 1" range="-1.61443 1.61443"/>
+                      <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+                      <geom name="ghost_left_palm_center" type="sphere" pos="0.17 -0.015 0" size="0.01" contype="0" conaffinity="0" group="1" density="0" rgba="0.7 0.7 0.7 0.7"/>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+
+        <!-- 右臂 -->
+        <body name="ghost_right_shoulder_pitch_link" pos="0.0039563 -0.10021 0.24778" quat="0.990264 -0.139201 1.38722e-05 9.86868e-05">
+          <joint name="ghost_right_shoulder_pitch_joint" axis="0 1 0" range="-3.0892 2.6704"/>
+          <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+          <body name="ghost_right_shoulder_roll_link" pos="0 -0.038 -0.013831" quat="0.990268 0.139172 0 0">
+            <joint name="ghost_right_shoulder_roll_joint" axis="1 0 0" range="-2.2515 1.5882"/>
+            <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+            <body name="ghost_right_shoulder_yaw_link" pos="0 -0.00624 -0.1032">
+              <joint name="ghost_right_shoulder_yaw_joint" axis="0 0 1" range="-2.618 2.618"/>
+              <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+              <body name="ghost_right_elbow_link" pos="0.015783 0 -0.080518">
+                <joint name="ghost_right_elbow_joint" axis="0 1 0" range="-1.0472 2.0944"/>
+                <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+                <body name="ghost_right_wrist_roll_link" pos="0.1 -0.00188791 -0.01">
+                  <joint name="ghost_right_wrist_roll_joint" axis="1 0 0" range="-1.97222 1.97222"/>
+                  <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+                  <body name="ghost_right_wrist_pitch_link" pos="0.038 0 0">
+                    <joint name="ghost_right_wrist_pitch_joint" axis="0 1 0" range="-1.61443 1.61443"/>
+                    <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+                    <body name="ghost_right_wrist_yaw_link" pos="0.046 0 0">
+                      <joint name="ghost_right_wrist_yaw_joint" axis="0 0 1" range="-1.61443 1.61443"/>
+                      <geom type="sphere" size="0.01" contype="0" conaffinity="0" group="1" rgba="0.7 0.7 0.7 0.7"/>
+                      <geom name="ghost_right_palm_center" type="sphere" pos="0.17 0.015 0" size="0.01" contype="0" conaffinity="0" group="1" density="0" rgba="0.7 0.7 0.7 0.7"/>
+                    </body>
+                  </body>
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </body>
+</body>
+</worldbody>
+</mujoco>
