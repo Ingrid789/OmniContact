@@ -7,7 +7,7 @@
   <a href="https://github.com/XiaoyiLin-code">Xiaoyi Lin</a><sup>1,3,*</sup>,
   <a href="https://astrorix.github.io/">Ji Ma</a><sup>1</sup>,
   <a href="https://wyhuai.github.io/info/">Yinhuai Wang</a><sup>2,✉</sup>,
-  <a href="https://www.linkedin.com/in/koukou-luo-801275295/">Koukou Luo</a><sup>2</sup>,
+  <a href="https://chubbyemo.github.io/">Koukou Luo</a><sup>2</sup>,
   <a href="https://scholar.google.com/citations?user=3dhUvVYAAAAJ&hl=zh-CN&oi=ao">Jiahao Ji</a><sup>1</sup>,
   <a href="https://why618188.github.io/">Huayi Wang</a><sup>1,4</sup>,
   <a href="https://wenjiawang0312.github.io/">Wenjia Wang</a><sup>1,4</sup>,
