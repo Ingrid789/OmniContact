@@ -5,7 +5,6 @@ import numpy as np
 from policy.omnicontact.CFgen_meta1_loco import CfGenLoco
 from policy.omnicontact.CFgen_meta2_carrybox import CfGenCarryBox
 from policy.omnicontact.CFgen_meta3_pushbox_innerside import CfGenPushBoxInnerSide
-from policy.omnicontact.CFgen_meta3_pushbox_topside import CfGenPushBoxTopSide
 from policy.omnicontact.CFgen_meta3_pushbox_twosides import CfGenPushBoxTwoSides
 from policy.omnicontact.CFgen_meta4_slidebox import CfGenSlideBox
 from policy.omnicontact.CFgen_meta5_relocateball import CfGenRelocateBall
@@ -27,7 +26,6 @@ SINGLE_OBJECT_CFGEN_TASKS = {
     "loco": (None, CfGenLoco),
     "pushbox-two": ("box", CfGenPushBoxTwoSides),
     "pushbox-in": ("box", CfGenPushBoxInnerSide),
-    "pushbox-up": ("box", CfGenPushBoxTopSide),
     "slidebox": ("box", CfGenSlideBox),
     "slidebox-left": ("box", CfGenSlideBox),
     "slidebox-right": ("box", CfGenSlideBox),

@@ -12,7 +12,6 @@ TASK_XML_PATHS = {
     "pushbox": "g1_description/omnicontact_push_box.xml",
     "pushbox-two": "g1_description/omnicontact_push_box.xml",
     "pushbox-in": "g1_description/omnicontact_push_box.xml",
-    "pushbox-up": "g1_description/omnicontact_push_box.xml",
     "slidebox": "g1_description/omnicontact_slide_box.xml",
     "slidebox-left": "g1_description/omnicontact_slide_box.xml",
     "slidebox-right": "g1_description/omnicontact_slide_box.xml",

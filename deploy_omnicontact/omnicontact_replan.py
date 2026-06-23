@@ -15,7 +15,7 @@ class OmniContactCarryboxReplan:
     _PUSHBOX_FINAL_GOAL_TOLERANCE = 0.5
     _OBJ_SPEED_THRESHOLD = 0.05
     _OBJ_ANG_SPEED_THRESHOLD = 0.05
-    _PUSHBOX_TASKS = {"pushbox-two", "pushbox-in", "pushbox-up"}
+    _PUSHBOX_TASKS = {"pushbox-two", "pushbox-in"}
     _BALL_TASKS = {"relocateball"}
 
     def __init__(self, runner, enabled: bool):

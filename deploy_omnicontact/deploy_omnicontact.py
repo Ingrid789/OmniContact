@@ -48,7 +48,6 @@ TASK_XML_PATHS = {
     "pushbox": "g1_description/omnicontact_push_box.xml",
     "pushbox-two": "g1_description/omnicontact_push_box.xml",
     "pushbox-in": "g1_description/omnicontact_push_box.xml",
-    "pushbox-up": "g1_description/omnicontact_push_box.xml",
     "slidebox": "g1_description/omnicontact_slide_box.xml",
     "slidebox-left": "g1_description/omnicontact_slide_box.xml",
     "slidebox-right": "g1_description/omnicontact_slide_box.xml",
@@ -111,7 +110,7 @@ if __name__ == "__main__":
     with open(mujoco_yaml_path, "r") as f:
         config = yaml.safe_load(f)
     config = config or {}
-    task_choices = config.get("task_choices", ["carrybox", "pushbox-two", "pushbox-in", "pushbox-up", "relocateball", "kickball", "kickbox"])
+    task_choices = config.get("task_choices", ["carrybox", "pushbox-two", "pushbox-in", "relocateball", "kickball", "kickbox"])
     task_choices = list(task_choices)
     for alias in TASK_ALIASES:
         if alias not in task_choices:
@@ -123,7 +122,7 @@ if __name__ == "__main__":
     reference_yellow = config_array(config, "reference_no_contact_rgba", shape=4)
     reference_red = config_array(config, "reference_contact_rgba", shape=4)
 
-    parser = argparse.ArgumentParser(description="Interactive Mujoco deploy script for carrybox/pushbox-two/pushbox-in/pushbox-up skills.")
+    parser = argparse.ArgumentParser(description="Interactive Mujoco deploy script for carrybox and pushbox skills.")
     parser.add_argument(
         "--init-pos",
         type=float,

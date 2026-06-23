@@ -54,9 +54,9 @@ This repository provides two MuJoCo execution paths:
 - `deploy_omnicontact/run_skill_omnicontact.py`: direct scripted execution for CFgen or NPZmotion tracking.
 - `deploy_omnicontact/deploy_omnicontact.py`: interactive hot-switch execution with an Xbox joystick, designed to mirror the state switching pattern used by sim2real deployment.
 
-## 🛠️ Installation
+## ⚙️ Setup
 
-Create the Python environment:
+Create and activate the Python environment:
 
 ```bash
 conda create -n omnicontact python=3.11 -y
@@ -65,24 +65,19 @@ conda install pytorch==2.3.1 torchvision==0.18.1 torchaudio==2.3.1 pytorch-cuda=
 pip install numpy onnx onnxruntime mujoco pyyaml scipy pygame
 ```
 
-Install the repository:
+Run commands from the repository root:
 
 ```bash
-cd /home/lenovo/NR/omnicontact_sim2sim-real
-pip install -e .
+cd /path/to/OmniContact_sim2sim
 ```
 
-The local development environment used by this repo often points VSCode launch configs to:
+The direct runner resolves relative model paths under `policy/omnicontact/model/`, so `--policy policy.onnx` maps to `policy/omnicontact/model/policy.onnx`.
 
-```bash
-/home/lenovo/miniconda3/envs/nair_sim/bin/python
-```
+## ▶️ Direct Runner
 
-## 🚀 Direct Runner
+Use `run_skill_omnicontact.py` for scripted runs that start OmniContact immediately.
 
-Use `run_skill_omnicontact.py` when you want a scripted run that immediately starts OmniContact.
-
-### 🧪 CFgen Reference
+### 🧭 CFgen Reference
 
 ```bash
 python deploy_omnicontact/run_skill_omnicontact.py \
@@ -93,22 +88,15 @@ python deploy_omnicontact/run_skill_omnicontact.py \
   --goal-pos 2.5 0.5
 ```
 
-Supported single-skill tasks include:
+Supported single-skill tasks:
 
-```text
-loco
-carrybox
-pushbox
-pushbox-in
-pushbox-two
-pushbox-up
-slidebox
-slidebox-left
-slidebox-right
-relocateball
-kickball
-kickbox
-```
+| Family | Tasks |
+| --- | --- |
+| Locomotion | `loco` |
+| Carry | `carrybox` |
+| Push | `pushbox`, `pushbox-in`, `pushbox-two` |
+| Slide | `slidebox`, `slidebox-left`, `slidebox-right` |
+| Ball | `relocateball`, `kickball` |
 
 `--task pushbox` is treated as an alias for `pushbox-in`.
 
@@ -123,16 +111,23 @@ python deploy_omnicontact/run_skill_omnicontact.py \
   --goal-pos 2.5 0.5
 ```
 
-Common chains:
+Common chain presets include `push-carry`, `carry-push`, `push-relocate`, `carry-carry`, `carry-carry-carry`, and `carryheart`.
 
-```text
-push-carry
-carry-push
-push-relocate
-carry-carry
-carry-carry-carry
-carryheart
-```
+<details>
+<summary>Chain XML mapping</summary>
+
+| Chain | Scene XML |
+| --- | --- |
+| `push-carry` | `g1_description/omnicontact_pushcarry_box.xml` |
+| `carry-push` | `g1_description/omnicontact_pushcarry_box.xml` |
+| `push-relocate` | `g1_description/omnicontact_pushrelocate_ball.xml` |
+| `carry-carry` | `g1_description/omnicontact_stack_2box.xml` |
+| `carry-carry-carry` | `g1_description/omnicontact_stack_3box.xml` |
+| `carryheart` | `g1_description/omnicontact_heart_10box.xml` |
+
+</details>
+
+<br>
 
 Extra object initialization can be provided for chained tasks:
 
@@ -146,9 +141,9 @@ python deploy_omnicontact/run_skill_omnicontact.py \
   --goal-pos 2.5 0.5
 ```
 
-### 🗂️ NPZ Motion Tracking
+### 🎞️ NPZ Motion Tracking
 
-Use `reference-source=NPZmotion` to track a full `.npz` motion from `data/`.
+Use `--reference-source NPZmotion` to track a full `.npz` motion from `data/`.
 
 ```bash
 python deploy_omnicontact/run_skill_omnicontact.py \
@@ -158,17 +153,22 @@ python deploy_omnicontact/run_skill_omnicontact.py \
   --start-frame 0
 ```
 
-The runner can infer XML assets from common data folders:
+The runner infers XML assets from common data folders. Pass `--xml-path` to override automatic XML selection.
 
-```text
-data/carrybox     -> g1_description/omnicontact_carry_box.xml
-data/loco         -> g1_description/omnicontact_carry_box.xml
-data/pushbox      -> g1_description/omnicontact_push_box.xml
-data/slidebox     -> g1_description/omnicontact_slide_box_npz.xml
-data/relocateball -> g1_description/omnicontact_relocate_ball.xml
-```
+<details>
+<summary>NPZ XML mapping</summary>
 
-You can still override the XML manually:
+| NPZ path prefix | Scene XML |
+| --- | --- |
+| `data/loco` | `g1_description/omnicontact_carry_box.xml` |
+| `data/carrybox` | `g1_description/omnicontact_carry_box.xml` |
+| `data/pushbox` | `g1_description/omnicontact_push_box_npz.xml` |
+| `data/slidebox` | `g1_description/omnicontact_slide_box_npz.xml` |
+| `data/relocateball` | `g1_description/omnicontact_relocate_ball.xml` |
+
+</details>
+
+<br>
 
 ```bash
 python deploy_omnicontact/run_skill_omnicontact.py \
@@ -178,27 +178,32 @@ python deploy_omnicontact/run_skill_omnicontact.py \
   --npz-dir data/relocateball/relocateball_motion_3_with_contact.npz
 ```
 
-Useful runner options:
+<details>
+<summary>Useful runner options</summary>
 
-```text
---headless
---max-steps N
---stop-when-done
---start-frame N
---end-frame N
---no-reset-env
---disable-replan
-```
+| Option | Meaning |
+| --- | --- |
+| `--headless` | Run without opening the MuJoCo GLFW viewer. |
+| `--max-steps N` | Stop after `N` simulation steps. Values `<=0` mean unlimited. |
+| `--stop-when-done` | Stop when CFgen reaches the end and switches back to locomotion. |
+| `--start-frame N` | Inclusive start frame for NPZ motion tracking. |
+| `--end-frame N` | Exclusive end frame for NPZ motion tracking. `-1` uses all remaining frames. |
+| `--no-reset-env` | Disable startup environment reset. |
+| `--disable-replan` | Disable CFgen replan support. |
+
+</details>
+
+<br>
 
 ## 🎮 Interactive Hot-Switch Deploy
 
-`deploy_omnicontact/deploy_omnicontact.py` is different from the direct runner. It is an interactive MuJoCo deployment harness that keeps the whole FSM alive and allows hot-switching between policies with an Xbox joystick:
+`deploy_omnicontact/deploy_omnicontact.py` keeps the full FSM alive and allows hot-switching between policies with an Xbox joystick:
 
 ```text
 Passive / default state -> DefaultPose -> LocoMode -> OmniContact
 ```
 
-This is useful because the same hot-switch idea can be applied to sim2real deployment: bring the robot to a stable default pose, switch into locomotion, then switch into the OmniContact policy at the desired moment without restarting the controller.
+This mirrors the sim2real pattern: bring the robot to a stable default pose, switch into locomotion, then switch into the OmniContact policy at the desired moment without restarting the controller.
 
 ### ▶️ Example
 
@@ -210,34 +215,44 @@ python deploy_omnicontact/deploy_omnicontact.py \
   --box-half-dims 0.15 0.15 0.15
 ```
 
-`deploy_omnicontact.py` automatically selects the MuJoCo XML from `--task`:
+`deploy_omnicontact.py` automatically selects the MuJoCo XML from `--task`. Pass `--xml-path` only when you want to override this automatic mapping.
 
-```text
-carrybox              -> g1_description/omnicontact_carry_box.xml
-pushbox / pushbox-*   -> g1_description/omnicontact_push_box.xml
-slidebox / slidebox-* -> g1_description/omnicontact_slide_box.xml
-relocateball          -> g1_description/omnicontact_relocate_ball.xml
-kickball / kickbox    -> g1_description/omnicontact_kick_ball.xml
-```
+<details>
+<summary>Deploy XML mapping</summary>
 
-Pass `--xml-path` only when you want to override this automatic mapping.
+| Task | Scene XML |
+| --- | --- |
+| `carrybox` | `g1_description/omnicontact_carry_box.xml` |
+| `pushbox`, `pushbox-in`, `pushbox-two` | `g1_description/omnicontact_push_box.xml` |
+| `slidebox`, `slidebox-left`, `slidebox-right` | `g1_description/omnicontact_slide_box.xml` |
+| `relocateball` | `g1_description/omnicontact_relocate_ball.xml` |
+| `kickball`, `kickbox` | `g1_description/omnicontact_kick_ball.xml` |
+| `push-carry`, `carry-push` | `g1_description/omnicontact_pushcarry_box.xml` |
+| `push-relocate` | `g1_description/omnicontact_pushrelocate_ball.xml` |
+| `carry-carry` | `g1_description/omnicontact_stack_2box.xml` |
+| `carry-carry-carry` | `g1_description/omnicontact_stack_3box.xml` |
+| `carryheart` | `g1_description/omnicontact_heart_10box.xml` |
+
+</details>
+
+<br>
 
 ### 🕹️ Xbox Joystick Controls
 
-The joystick mapping is defined in `common/joystick.py`. The important runtime switches are:
+The joystick mapping is defined in `common/joystick.py`.
 
-```text
-START        -> POS_RESET / DefaultPose
-R1 + A       -> LocoMode
-L1 + A       -> OmniContact policy
-R1 + B       -> Skill cooldown / auxiliary skill mode
-L3           -> Passive
-SELECT       -> Stop the deploy loop
-```
+| Input | Runtime switch |
+| --- | --- |
+| `START` | `POS_RESET` / `DefaultPose` |
+| `R1 + A` | `LocoMode` |
+| `L1 + A` | OmniContact policy |
+| `R1 + B` | Skill cooldown / auxiliary skill mode |
+| `L3` | Passive |
+| `SELECT` | Stop the deploy loop |
 
 When switching to OmniContact with `L1 + A`, the script resets the active object and table references from `--init-pos`, `--goal-pos`, and `--box-half-dims`, then enters the OmniContact FSM state.
 
-The interactive deploy also visualizes:
+The interactive deploy visualizes:
 
 - wrist, torso, and ankle reference mocaps;
 - contact-state color changes;
@@ -252,8 +267,7 @@ If the ghost robot is not visible in the MuJoCo viewer, enable `group 1` renderi
 @article{yu2026omnicontact,
   title={OmniContact: Chaining Meta-Skills via Contact Flow for Generalizable Humanoid Loco-Manipulation},
   author={Yu, Runyi and Lin, Xiaoyi and Ma, Ji and Wang, Yinhuai and Luo, Koukou and Ji, Jiahao and Wang, Huayi and Wang, Wenjia and Zhang, Runhan and Tan, Ping and Wu, Ting and Dai, Ruoli and Chen, Qifeng and Han, Lei},
-  journal={arXiv preprint arXiv:2606.xxxxx},
-  year={2026},
-  url={https://arxiv.org/abs/2606.xxxxx}
+  journal={arXiv preprint arXiv:coming soon},
+  year={2026}
 }
 ```

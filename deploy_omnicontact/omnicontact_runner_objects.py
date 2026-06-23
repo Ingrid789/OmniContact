@@ -91,7 +91,7 @@ class OmniContactObjectsMixin:
         if self.policy.task == "loco":
             goal[2] = float(DEFAULT_PELVIS_Z)
             return goal
-        if self.policy.task in {"pushbox-two", "pushbox-in", "pushbox-up", "slidebox", "slidebox-left", "slidebox-right", "kickball", "push-carry", "carry-push", "push-relocate"}:
+        if self.policy.task in {"pushbox-two", "pushbox-in", "slidebox", "slidebox-left", "slidebox-right", "kickball", "push-carry", "carry-push", "push-relocate"}:
             goal[2] = float(self.policy.box_dims[2])
         return goal
 
@@ -124,7 +124,7 @@ class OmniContactObjectsMixin:
         if self.policy.task == "loco":
             init_pos[2] = float(DEFAULT_PELVIS_Z)
             return init_pos
-        if self.policy.task in {"pushbox-two", "pushbox-in", "pushbox-up", "slidebox", "slidebox-left", "slidebox-right", "relocateball", "kickball", "push-carry", "carry-push", "push-relocate"}:
+        if self.policy.task in {"pushbox-two", "pushbox-in", "slidebox", "slidebox-left", "slidebox-right", "relocateball", "kickball", "push-carry", "carry-push", "push-relocate"}:
             init_pos[2] = float(self.policy.box_dims[2])
         return init_pos
 

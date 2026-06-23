@@ -298,7 +298,7 @@ class OmniContact(FSMState):
             self.goal_pos = np.array([5.0, 0.0, 0.55], dtype=np.float32)
         else:
             self.goal_pos = np.asarray(goal_override, dtype=np.float32).reshape(3).copy()
-        if self.task in {"pushbox-two", "pushbox-in", "pushbox-up", "slidebox", "slidebox-left", "slidebox-right", "kickball", "push-carry", "carry-push", "push-relocate"}:
+        if self.task in {"pushbox-two", "pushbox-in", "slidebox", "slidebox-left", "slidebox-right", "kickball", "push-carry", "carry-push", "push-relocate"}:
             self.goal_pos[2] = float(self.box_dims[2])
         elif self.task == "loco":
             self.goal_pos[2] = float(DEFAULT_PELVIS_Z)
