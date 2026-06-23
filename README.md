@@ -210,9 +210,8 @@ This mirrors the sim2real pattern: bring the robot to a stable default pose, swi
 ```bash
 python deploy_omnicontact/deploy_omnicontact.py \
   --task pushbox \
-  --init-pos 3.0 0.0 0.55 \
-  --goal-pos 3.0 0.0 0.15 \
-  --box-half-dims 0.15 0.15 0.15
+  --init-pos 1.0 1.0 \
+  --goal-pos 3.0 0.0
 ```
 
 `deploy_omnicontact.py` automatically selects the MuJoCo XML from `--task`. Pass `--xml-path` only when you want to override this automatic mapping.

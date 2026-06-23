@@ -62,6 +62,33 @@ TASK_XML_PATHS = {
     "carryheart": "g1_description/omnicontact_heart_10box.xml",
 }
 
+INIT_Z_AUTO_TASKS = {
+    "pushbox-two",
+    "pushbox-in",
+    "slidebox",
+    "slidebox-left",
+    "slidebox-right",
+    "relocateball",
+    "kickball",
+    "kickbox",
+    "push-carry",
+    "carry-push",
+    "push-relocate",
+}
+
+GOAL_Z_AUTO_TASKS = {
+    "pushbox-two",
+    "pushbox-in",
+    "slidebox",
+    "slidebox-left",
+    "slidebox-right",
+    "kickball",
+    "kickbox",
+    "push-carry",
+    "carry-push",
+    "push-relocate",
+}
+
 
 def resolve_xml_path(task: str, xml_path_override: str, config: dict) -> str:
     xml_path = str(xml_path_override).strip()
@@ -71,6 +98,102 @@ def resolve_xml_path(task: str, xml_path_override: str, config: dict) -> str:
     if not path.is_absolute():
         path = Path(PROJECT_ROOT) / path
     return str(path.resolve())
+
+
+def geom_half_dims(model: mujoco.MjModel, *geom_names: str, default: tuple[float, float, float]) -> np.ndarray:
+    for geom_name in geom_names:
+        geom_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_GEOM, geom_name)
+        if geom_id >= 0:
+            size = np.asarray(model.geom_size[geom_id, :3], dtype=np.float32).copy()
+            geom_type = int(model.geom_type[geom_id])
+            if geom_type == int(mujoco.mjtGeom.mjGEOM_SPHERE):
+                radius = float(size[0])
+                return np.array([radius, radius, radius], dtype=np.float32)
+            return size
+    return np.asarray(default, dtype=np.float32).reshape(3).copy()
+
+
+def infer_policy_dims_from_model(model: mujoco.MjModel, override_dims: np.ndarray | None = None) -> dict[str, np.ndarray]:
+    if override_dims is not None:
+        dims = np.asarray(override_dims, dtype=np.float32).reshape(3)
+        stack_dims = np.asarray(
+            [[0.20, 0.20, 0.15], [0.15, 0.15, 0.15], [0.10, 0.10, 0.10]],
+            dtype=np.float32,
+        )
+        return {
+            "box_dims": dims.copy(),
+            "ball_dims": dims.copy(),
+            "push_box_dims": dims.copy(),
+            "carry_box_dims": dims.copy(),
+            "stack_box_dims": stack_dims,
+        }
+
+    stack_dims = []
+    for geom_name, default in zip(
+        ("stack_box_large_geom", "stack_box_mid_geom", "stack_box_small_geom"),
+        ((0.20, 0.20, 0.15), (0.15, 0.15, 0.15), (0.10, 0.10, 0.10)),
+    ):
+        stack_dims.append(geom_half_dims(model, geom_name, default=default))
+
+    return {
+        "box_dims": geom_half_dims(
+            model,
+            "ghost_box_geom",
+            "box_geom",
+            "ball_geom",
+            default=(0.15, 0.15, 0.15),
+        ),
+        "push_box_dims": geom_half_dims(
+            model,
+            "ghost_push_box_geom",
+            "ghost_box_geom",
+            "push_box_geom_top",
+            "box_geom_top",
+            default=(0.23, 0.25, 0.26),
+        ),
+        "ball_dims": geom_half_dims(
+            model,
+            "ghost_ball_geom",
+            "ball_geom",
+            default=(0.10, 0.10, 0.10),
+        ),
+        "carry_box_dims": geom_half_dims(
+            model,
+            "ghost_carry_box_geom",
+            "carry_box_geom",
+            default=(0.15, 0.15, 0.15),
+        ),
+        "stack_box_dims": np.asarray(stack_dims, dtype=np.float32).reshape(3, 3),
+    }
+
+
+def select_active_box_dims(task: str, dims_by_profile: dict[str, np.ndarray]) -> tuple[str, np.ndarray]:
+    if task in {"push-carry", "push-relocate"}:
+        return "push_box", np.asarray(dims_by_profile["push_box_dims"], dtype=np.float32).copy()
+    if task == "carry-push":
+        return "carry_box", np.asarray(dims_by_profile["carry_box_dims"], dtype=np.float32).copy()
+    if task in {"relocateball", "kickball", "kickbox"}:
+        return "ball", np.asarray(dims_by_profile["ball_dims"], dtype=np.float32).copy()
+    return "box", np.asarray(dims_by_profile["box_dims"], dtype=np.float32).copy()
+
+
+def normalize_object_pos_for_task(pos: np.ndarray, task: str, half_z: float, *, is_goal: bool) -> np.ndarray:
+    out = np.asarray(pos, dtype=np.float32).reshape(3).copy()
+    auto_tasks = GOAL_Z_AUTO_TASKS if is_goal else INIT_Z_AUTO_TASKS
+    if task in auto_tasks:
+        out[2] = float(half_z)
+    return out
+
+
+def parse_object_pos_arg(value, default, half_z: float, task: str, *, is_goal: bool) -> np.ndarray:
+    pos = np.asarray(value if value is not None else default, dtype=np.float32).reshape(-1)
+    if len(pos) == 2:
+        pos = np.array([pos[0], pos[1], half_z], dtype=np.float32)
+    elif len(pos) == 3:
+        pos = pos.astype(np.float32).copy()
+    else:
+        raise ValueError("--init-pos/--goal-pos must provide either X Y or X Y Z.")
+    return normalize_object_pos_for_task(pos, task, half_z, is_goal=is_goal)
 
 
 @dataclass
@@ -126,25 +249,25 @@ if __name__ == "__main__":
     parser.add_argument(
         "--init-pos",
         type=float,
-        nargs=3,
+        nargs="+",
         default=config.get("init_pos", (1.0, 0.0, 0.55)),
-        metavar=("X", "Y", "Z"),
+        metavar="POS",
         help="Initial object position used by CFgen reset.",
     )
     parser.add_argument(
         "--box-half-dims",
         type=float,
         nargs=3,
-        default=config.get("box_half_dims", (0.15, 0.15, 0.15)),
+        default=None,
         metavar=("HX", "HY", "HZ"),
-        help="Object half dimensions used by WTAC planner and bbox observation.",
+        help="Optional override for object half dimensions. If omitted, dimensions are inferred from the selected XML.",
     )
     parser.add_argument(
         "--goal-pos",
         type=float,
-        nargs=3,
+        nargs="+",
         default=config.get("goal_pos", (3.0, 0.0, 0.26)),
-        metavar=("X", "Y", "Z"),
+        metavar="POS",
         help="Goal object position used by CFgen reset and table visualization.",
     )
     parser.add_argument(
@@ -175,17 +298,33 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     args.task = TASK_ALIASES.get(args.task, args.task)
-    init_pos = np.asarray(args.init_pos, dtype=np.float32).reshape(3)
-    goal_pos = np.asarray(args.goal_pos, dtype=np.float32).reshape(3)
-    box_half_dims = np.asarray(args.box_half_dims, dtype=np.float32).reshape(3)
+    xml_path = resolve_xml_path(args.task, args.xml_path, config)
+    print(f"[deploy] task={args.task} xml_path={xml_path}")
+
+    m = mujoco.MjModel.from_xml_path(xml_path)
+    d = mujoco.MjData(m)
+    dims_by_profile = infer_policy_dims_from_model(
+        m,
+        None if args.box_half_dims is None else np.asarray(args.box_half_dims, dtype=np.float32).reshape(3),
+    )
+    active_object_name, box_half_dims = select_active_box_dims(args.task, dims_by_profile)
+    init_pos = parse_object_pos_arg(
+        args.init_pos,
+        config.get("init_pos", (1.0, 0.0, 0.55)),
+        float(box_half_dims[2]),
+        args.task,
+        is_goal=False,
+    )
+    goal_pos = parse_object_pos_arg(
+        args.goal_pos,
+        config.get("goal_pos", (3.0, 0.0, 0.26)),
+        float(box_half_dims[2]),
+        args.task,
+        is_goal=True,
+    )
 
     simulation_dt = config["simulation_dt"]
     control_decimation = config["control_decimation"]
-    xml_path = resolve_xml_path(args.task, args.xml_path, config)
-    print(f"[deploy] task={args.task} xml_path={xml_path}")
-        
-    m = mujoco.MjModel.from_xml_path(xml_path)
-    d = mujoco.MjData(m)
 
     def mj_id(obj_type, name: str) -> int:
         return mujoco.mj_name2id(m, obj_type, name)
@@ -243,11 +382,17 @@ if __name__ == "__main__":
     FSM_controller = FSM(state_cmd, policy_output)
     contactflow_policy = FSM_controller.omnicontact
     contactflow_policy.task = args.task
+    contactflow_policy.active_object_name = active_object_name
+    contactflow_policy.ball_dims = np.asarray(dims_by_profile["ball_dims"], dtype=np.float32).copy()
+    contactflow_policy.push_box_dims = np.asarray(dims_by_profile["push_box_dims"], dtype=np.float32).copy()
+    contactflow_policy.carry_box_dims = np.asarray(dims_by_profile["carry_box_dims"], dtype=np.float32).copy()
+    contactflow_policy.stack_box_dims = np.asarray(dims_by_profile["stack_box_dims"], dtype=np.float32).copy()
     contactflow_policy.box_dims = box_half_dims.copy()
     contactflow_policy.goal_pos_override = goal_pos.copy()
     contactflow_policy.bbox_scale = contactflow_policy.box_dims * 2.0
     contactflow_policy.bbox_offsets_scaled = contactflow_policy.bbox_offsets * contactflow_policy.bbox_scale.reshape(1, 3)
     contactflow_policy.replan_active = False
+    print(f"[deploy] active_object={active_object_name} half_dims={box_half_dims.tolist()}")
 
     ghost_robot_joint_id = joint_id("ghost_floating_base_joint")
     ghost_robot_qpos_adr = int(m.jnt_qposadr[ghost_robot_joint_id]) if ghost_robot_joint_id >= 0 else -1
