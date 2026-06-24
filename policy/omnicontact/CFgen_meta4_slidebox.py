@@ -28,8 +28,8 @@ class CfGenSlideBox(CfGenBase):
             "phase11_slide_standoff_dist": 0.3,
             "phase11_waypoint_trigger_margin": 0.05,
             "phase11_waypoint_trigger_distance": 0.18,
-            "phase11_obstacle_margin": 0.55,
-            "phase11_waypoint_clearance": 0.75,
+            "phase11_obstacle_margin": 0.2,
+            "phase11_waypoint_clearance": 0.3,
             "slide_lateral_offset": 0.05,
         }
 
