@@ -173,16 +173,21 @@ class OmniContactRunner(
         self.policy_output = PolicyOutput(self.num_joints)
         task = "carrybox" if self.is_carryheart else self.args.task
         override_onnx_path = resolve_policy_path(getattr(self.args, "policy", ""))
+        policy_label = "override policy onnx"
         task_policy_overrides = {
             "kickball": "kick_50k.onnx",
             "pushbox-two": "combine_50k.onnx",
         }
         if task in task_policy_overrides:
             override_onnx_path = resolve_policy_path(task_policy_overrides[task])
+            policy_label = f"{task} policy onnx"
+        npz_policy_path = self._policy_path_from_npz_dir()
+        if npz_policy_path:
+            override_onnx_path = resolve_policy_path(npz_policy_path)
+            policy_label = "NPZ path policy onnx"
         self.policy = OmniContact(self.state_cmd, self.policy_output, onnx_path=override_onnx_path)
         if override_onnx_path is not None:
-            label = f"{task} policy onnx" if task in task_policy_overrides else "override policy onnx"
-            print(f"[runner] {label}: {override_onnx_path}")
+            print(f"[runner] {policy_label}: {override_onnx_path}")
         self.policy.task = task
         if self.policy.task == "carry-carry":
             self.policy.stackbox_stage_count = 2

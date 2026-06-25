@@ -32,6 +32,11 @@ NPZ_DIR_XML_PATHS = (
     ("data/pushbox", "g1_description/omnicontact_push_box_npz.xml"),
     ("data/slidebox", "g1_description/omnicontact_slide_box_npz.xml"),
     ("data/relocateball", "g1_description/omnicontact_relocate_ball.xml"),
+    ("data/kickball", "g1_description/omnicontact_kick_ball_npz.xml"),
+)
+
+NPZ_DIR_POLICY_PATHS = (
+    ("data/kickball", "kick_50k.onnx"),
 )
 
 
@@ -53,6 +58,12 @@ class OmniContactConfigMixin:
         print(f"[runner] xml_path: {self.xml_path}")
 
     def _xml_path_from_npz_dir(self) -> str:
+        return self._path_from_npz_dir(NPZ_DIR_XML_PATHS)
+
+    def _policy_path_from_npz_dir(self) -> str:
+        return self._path_from_npz_dir(NPZ_DIR_POLICY_PATHS)
+
+    def _path_from_npz_dir(self, mappings) -> str:
         if str(getattr(self.args, "reference_source", "")).strip() != "NPZmotion":
             return ""
         npz_dir = str(getattr(self.args, "npz_dir", "")).strip()
@@ -71,9 +82,9 @@ class OmniContactConfigMixin:
         except ValueError:
             return ""
         relative_text = relative.as_posix().rstrip("/")
-        for npz_dir_prefix, xml_path in NPZ_DIR_XML_PATHS:
+        for npz_dir_prefix, mapped_path in mappings:
             if relative_text == npz_dir_prefix or relative_text.startswith(f"{npz_dir_prefix}/"):
-                return xml_path
+                return mapped_path
         return ""
 
     def _resolve_task_chaining(self) -> None:

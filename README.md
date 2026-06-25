@@ -165,6 +165,7 @@ The runner infers XML assets from common data folders. Pass `--xml-path` to over
 | `data/pushbox` | `g1_description/omnicontact_push_box_npz.xml` |
 | `data/slidebox` | `g1_description/omnicontact_slide_box_npz.xml` |
 | `data/relocateball` | `g1_description/omnicontact_relocate_ball.xml` |
+| `data/kickball` | `g1_description/omnicontact_kick_ball_npz.xml` |
 
 </details>
 
