@@ -2,7 +2,7 @@
   OmniContact: Chaining Meta-Skills via Contact Flow for Generalizable Humanoid Loco-Manipulation
 </h1>
 
-<p align="center"><strong>🎆 Accepted to CORL 2026!</strong></p>
+<p align="center"><strong>🎉 Accepted to CORL 2026 🎉</strong></p>
 
 <p align="center">
   <a href="https://ingrid789.github.io/IngridYu/">Runyi Yu</a><sup>1,2,*</sup>,
@@ -23,7 +23,7 @@
 
 <p align="center">
   <sup>1</sup>Noitom Robotics&nbsp;&nbsp;
-  <sup>2</sup>The Hong Kong University of Science and Technology&nbsp;&nbsp;
+  <sup>2</sup>HKUST&nbsp;&nbsp;
   <sup>3</sup>Wuhan University&nbsp;&nbsp;
   <sup>4</sup>The University of Hong Kong
 </p>
@@ -39,7 +39,6 @@
   <a href="https://arxiv.org/abs/2606.26201"><img src="https://img.shields.io/badge/arXiv-2606.26201-b31b1b" alt="arXiv"></a>
   <a href="https://omnicontact.github.io/policy-viewer.html?v=policy-hide-push-ghostbox-20260604a"><img src="https://img.shields.io/badge/Live%20Demo-MuJoCo%20Policy%20Viewer-orange" alt="Live Demo"></a>
   <a href="https://huggingface.co/datasets/lightcone02/OmniContact-Dataset"><img src="https://img.shields.io/badge/Dataset-Hugging%20Face-yellow" alt="Dataset"></a>
-  <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/"><img src="https://img.shields.io/badge/License-CC%20BY--NC--SA%204.0-lightgrey" alt="License: CC BY-NC-SA 4.0"></a>
 </p>
 
 ---
