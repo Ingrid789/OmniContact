@@ -5,35 +5,6 @@
 <p align="center"><strong>🎉 Accepted to CORL 2026 🎉</strong></p>
 
 <p align="center">
-  <a href="https://ingrid789.github.io/IngridYu/">Runyi Yu</a><sup>1,2,*</sup>,
-  <a href="https://github.com/XiaoyiLin-code">Xiaoyi Lin</a><sup>1,3,*</sup>,
-  <a href="https://astrorix.github.io/">Ji Ma</a><sup>1</sup>,
-  <a href="https://wyhuai.github.io/info/">Yinhuai Wang</a><sup>2,✉</sup>,
-  <a href="https://chubbyemo.github.io/">Koukou Luo</a><sup>2</sup>,
-  <a href="https://scholar.google.com/citations?user=3dhUvVYAAAAJ&hl=zh-CN&oi=ao">Jiahao Ji</a><sup>1</sup>,
-  <a href="https://why618188.github.io/">Huayi Wang</a><sup>1,4</sup>,
-  <a href="https://wenjiawang0312.github.io/">Wenjia Wang</a><sup>1,4</sup>,
-  <a href="mailto:zhang-rh25@mails.tsinghua.edu.cn">Runhan Zhang</a><sup>1</sup>,
-  <a href="https://ece.hkust.edu.hk/pingtan">Ping Tan</a><sup>2</sup>,
-  <a href="https://www.linkedin.com/in/ting-wu-25332618/">Ting Wu</a><sup>1</sup>,
-  <a href="https://www.linkedin.com/in/tristan-ruoli-dai-b2369330/">Ruoli Dai</a><sup>1</sup>,
-  <a href="https://cqf.io/">Qifeng Chen</a><sup>2,✉</sup>,
-  <a href="https://www.leihan.org/">Lei Han</a><sup>1,✉</sup>
-</p>
-
-<p align="center">
-  <sup>1</sup>Noitom Robotics&nbsp;&nbsp;
-  <sup>2</sup>HKUST&nbsp;&nbsp;
-  <sup>3</sup>Wuhan University&nbsp;&nbsp;
-  <sup>4</sup>The University of Hong Kong
-</p>
-
-<p align="center">
-  <sup>*</sup>Equal contributors&nbsp;&nbsp;&nbsp;
-  <sup>✉</sup>Corresponding authors
-</p>
-
-<p align="center">
   <a href="https://github.com/Ingrid789/OmniContact_sim2sim"><img src="https://img.shields.io/badge/Code in Mujoco-CFGen-blue" alt="CF-Gen Mujoco Code"></a>
   <a href="https://omnicontact.github.io/"><img src="https://img.shields.io/badge/Project-Page-2ea44f" alt="Project Page"></a>
   <a href="https://arxiv.org/abs/2606.26201"><img src="https://img.shields.io/badge/arXiv-2606.26201-b31b1b" alt="arXiv"></a>
@@ -174,3 +145,17 @@ The distributed test requires local socket access.
 
 The **CF-Gen implementation and sim2sim code** are available in
 [OmniContact_sim2sim](https://github.com/Ingrid789/OmniContact_sim2sim).
+
+## 📚 Citation
+
+```bibtex
+@misc{yu2026omnicontactchainingmetaskillscontact,
+  title={OmniContact: Chaining Meta-Skills via Contact Flow for Generalizable Humanoid Loco-Manipulation},
+  author={Runyi Yu and Xiaoyi Lin and Ji Ma and Yinhuai Wang and Koukou Luo and Jiahao Ji and Huayi Wang and Wenjia Wang and Runhan Zhang and Ping Tan and Ting Wu and Ruoli Dai and Qifeng Chen and Lei Han},
+  year={2026},
+  eprint={2606.26201},
+  archivePrefix={arXiv},
+  primaryClass={cs.RO},
+  url={https://arxiv.org/abs/2606.26201},
+}
+```
