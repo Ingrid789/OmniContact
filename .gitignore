@@ -74,7 +74,9 @@ wandb/
 # External motion datasets
 /motions/
 /data/
+/assets/data/
 /assets/npz_clips/
+/assets/npz_clips_50fps/
 
 # External simulation assets; keep assets/*.py, robots/, and bundled URDFs.
 /assets/objects/*
@@ -84,5 +86,6 @@ wandb/
 /assets/g1/*.usda
 /assets/g1/*.usdc
 /assets/g1/*.usdz
+/assets/g1/*.urdf
 /assets/g1/meshes/
 /assets/unitree_description/meshes/
