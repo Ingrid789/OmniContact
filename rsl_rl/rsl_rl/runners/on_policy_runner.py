@@ -197,6 +197,12 @@ class OnPolicyRunner:
         lenbuffer = deque(maxlen=100)
         cur_reward_sum = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
         cur_episode_length = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
+        amp_enabled = isinstance(self.alg, AMPPPO)
+        if amp_enabled:
+            task_rewbuffer = deque(maxlen=100)
+            amp_rewbuffer = deque(maxlen=100)
+            cur_task_reward_sum = torch.zeros_like(cur_reward_sum)
+            cur_amp_reward_sum = torch.zeros_like(cur_reward_sum)
 
         # create buffers for logging extrinsic and intrinsic rewards
         if self.alg.rnd:
@@ -237,6 +243,7 @@ class OnPolicyRunner:
 
                     # process the step
                     self.alg.process_env_step(rewards, dones, infos)
+                    policy_rewards = self.alg._last_policy_reward if amp_enabled else rewards
 
                     # Extract intrinsic rewards (only for logging)
                     intrinsic_rewards = self.alg.intrinsic_rewards if self.alg.rnd else None
@@ -249,11 +256,14 @@ class OnPolicyRunner:
                             ep_infos.append(infos["log"])
                         # Update rewards
                         if self.alg.rnd:
-                            cur_ereward_sum += rewards
+                            cur_ereward_sum += policy_rewards
                             cur_ireward_sum += intrinsic_rewards  # type: ignore
-                            cur_reward_sum += rewards + intrinsic_rewards
+                            cur_reward_sum += policy_rewards + intrinsic_rewards
                         else:
-                            cur_reward_sum += rewards
+                            cur_reward_sum += policy_rewards
+                        if amp_enabled:
+                            cur_task_reward_sum += self.alg._last_task_reward
+                            cur_amp_reward_sum += self.alg._last_amp_reward
                         # Update episode length
                         cur_episode_length += 1
                         # Clear data for completed episodes
@@ -263,6 +273,11 @@ class OnPolicyRunner:
                         lenbuffer.extend(cur_episode_length[new_ids][:, 0].cpu().numpy().tolist())
                         cur_reward_sum[new_ids] = 0
                         cur_episode_length[new_ids] = 0
+                        if amp_enabled:
+                            task_rewbuffer.extend(cur_task_reward_sum[new_ids][:, 0].cpu().numpy().tolist())
+                            amp_rewbuffer.extend(cur_amp_reward_sum[new_ids][:, 0].cpu().numpy().tolist())
+                            cur_task_reward_sum[new_ids] = 0
+                            cur_amp_reward_sum[new_ids] = 0
                         # -- intrinsic and extrinsic rewards
                         if self.alg.rnd:
                             erewbuffer.extend(cur_ereward_sum[new_ids][:, 0].cpu().numpy().tolist())
@@ -346,6 +361,24 @@ class OnPolicyRunner:
             self.writer.add_scalar(f"Loss/{key}", value, locs["it"])
         self.writer.add_scalar("Loss/learning_rate", self.alg.learning_rate, locs["it"])
 
+        # Match nair_wbc's AMP dashboard, retaining the existing Loss/* tags.
+        # These are rollout step means, not completed-episode reward sums.
+        amp_tags = {
+            "amp_style_reward": "AMP/reward",
+            "amp_task_reward": "AMP/task_reward",
+            "amp_mixed_reward": "AMP/mixed_reward",
+            "amp_disc_logit": "AMP/disc_logit",
+            "amp_discriminator": "AMP/loss",
+            "amp_grad_penalty": "AMP/grad_penalty",
+            "amp_policy_prediction": "AMP/policy_pred",
+            "amp_expert_prediction": "AMP/expert_pred",
+        }
+        for key, tag in amp_tags.items():
+            if key in locs["loss_dict"]:
+                self.writer.add_scalar(tag, locs["loss_dict"][key], locs["it"])
+        if "amp_style_reward" in locs["loss_dict"]:
+            self.writer.add_scalar("Episode_Reward/amp_reward", locs["loss_dict"]["amp_style_reward"], locs["it"])
+
         # -- Policy
         self.writer.add_scalar("Policy/mean_noise_std", mean_std.item(), locs["it"])
 
@@ -356,6 +389,9 @@ class OnPolicyRunner:
 
         # -- Training
         if len(locs["rewbuffer"]) > 0:
+            if isinstance(self.alg, AMPPPO):
+                self.writer.add_scalar("Train/mean_task_reward", statistics.mean(locs["task_rewbuffer"]), locs["it"])
+                self.writer.add_scalar("Train/mean_amp_reward", statistics.mean(locs["amp_rewbuffer"]), locs["it"])
             # separate logging for intrinsic and extrinsic rewards
             if self.alg.rnd:
                 self.writer.add_scalar("Rnd/mean_extrinsic_reward", statistics.mean(locs["erewbuffer"]), locs["it"])
@@ -382,7 +418,8 @@ class OnPolicyRunner:
             )
             # -- Losses
             for key, value in locs["loss_dict"].items():
-                log_string += f"""{f'Mean {key} loss:':>{pad}} {value:.4f}\n"""
+                label = f"Mean {key}:" if key.endswith("_reward") or key == "amp_disc_logit" else f"Mean {key} loss:"
+                log_string += f"""{label:>{pad}} {value:.4f}\n"""
             # -- Rewards
             if self.alg.rnd:
                 log_string += (

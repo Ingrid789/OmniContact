@@ -58,4 +58,8 @@ class AMPDiscriminator(nn.Module):
 
     @torch.no_grad()
     def reward(self, observations, coefficient):
-        return coefficient * (1 - 0.25 * (self(observations) - 1).square()).clamp_min(0)
+        return self.reward_from_logits(self(observations), coefficient)
+
+    @staticmethod
+    def reward_from_logits(logits, coefficient):
+        return coefficient * (1 - 0.25 * (logits - 1).square()).clamp_min(0)

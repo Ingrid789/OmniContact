@@ -2,32 +2,17 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import re
 
 import isaaclab.sim as sim_utils
 
 from omnicontact.assets import asset_path
+from omnicontact.utils.motion_labels import asset_label_from_motion_file
 
 
 class OBJ_SPAWNER_CFG:
     _PUSH_PREFIX = "push_"
     _BOX_SIZE = r"\d+(?:-\d+){2}"
-    _CLIP_SUFFIX = r"(?:\d+_)*\d{3}"
-    _META_SKILL_PUSH_PATTERN = re.compile(
-        rf"^push_box_(?P<label>{_BOX_SIZE})_{_CLIP_SUFFIX}\.npz$", re.IGNORECASE
-    )
-    _META_SKILL_BOX_PATTERNS = (
-        re.compile(rf"^carry_box_(?P<label>{_BOX_SIZE})_{_CLIP_SUFFIX}\.npz$", re.IGNORECASE),
-        re.compile(rf"^loco_box_(?P<label>{_BOX_SIZE})_.+\.npz$", re.IGNORECASE),
-        re.compile(rf"^slide_box_(?P<label>{_BOX_SIZE})_{_CLIP_SUFFIX}\.npz$", re.IGNORECASE),
-    )
-    _META_SKILL_SOCCER_PATTERN = re.compile(
-        rf"^relocate_soccer_(?P<size>\d+)_{_CLIP_SUFFIX}\.npz$", re.IGNORECASE
-    )
-    _META_SKILL_PICK_PATTERN = re.compile(
-        rf"^pick_(?P<label>.+_{_BOX_SIZE})_{_CLIP_SUFFIX}\.npz$", re.IGNORECASE
-    )
     
     @classmethod
     def _asset_cfg_from_label(cls, label: str) -> sim_utils.SpawnerCfg:
@@ -64,30 +49,10 @@ class OBJ_SPAWNER_CFG:
         return str(label).replace("-", "_")
 
     @classmethod
-    def _extract_label_from_motion_name(cls, motion_name: str) -> str | None:
-        file_name = Path(motion_name).name
-        
-        for box_pattern in cls._META_SKILL_BOX_PATTERNS:
-            box_match = box_pattern.fullmatch(file_name)
-            if box_match is not None:
-                return box_match.group("label")
-       
-        push_match = cls._META_SKILL_PUSH_PATTERN.fullmatch(file_name)
-        if push_match is not None:
-            return f"{cls._PUSH_PREFIX}{push_match.group('label')}"
-        
-        soccer_match = cls._META_SKILL_SOCCER_PATTERN.fullmatch(file_name)
-        if soccer_match is not None:
-            return f"soccer_{soccer_match.group('size')}"
-
-        return None
-
-    @classmethod
     def _extract_label_counts_from_motion_files(cls, motion_files: list[str] | tuple[str, ...]) -> list[tuple[str, int]]:
         label_counts: dict[str, int] = {}
         for motion_file in motion_files:
-            motion_name = Path(motion_file).name
-            label = cls._extract_label_from_motion_name(motion_name)
+            label = asset_label_from_motion_file(motion_file)
             if label is None:
                 continue
             label_counts[label] = label_counts.get(label, 0) + 1

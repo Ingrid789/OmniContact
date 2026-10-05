@@ -55,6 +55,10 @@ class AMPPPO(PPO):
         self.amp_grad_pen_coef = float(amp_grad_pen_coef)
         self._amp_obs = None
         self._reward_stats = []
+        # Per-environment rewards for episode logging, before timeout bootstrapping.
+        self._last_task_reward = None
+        self._last_amp_reward = None
+        self._last_policy_reward = None
 
     def set_amp_observations(self, observations):
         if not isinstance(observations, torch.Tensor) or observations.ndim != 2 or observations.shape[1] != self.amp_obs_dim:
@@ -77,11 +81,15 @@ class AMPPPO(PPO):
         # cross-episode transitions or give them a spurious discriminator reward.
         valid = ~dones.reshape(-1).bool()
         with torch.no_grad():
-            style = self.discriminator.reward(self.discriminator_input(states, next_states), self.amp_reward_coef)
+            logits = self.discriminator(self.discriminator_input(states, next_states))
+            style = self.discriminator.reward_from_logits(logits, self.amp_reward_coef)
             style = torch.where(valid, style, 0.0)
             mixed = self.amp_tracking_weight * rewards + (1 - self.amp_tracking_weight) * style
             self.amp_replay.insert(states[valid], next_states[valid])
-            self._reward_stats.append(torch.stack((style.mean(), rewards.mean(), mixed.mean())))
+            self._last_task_reward = rewards.detach().clone()
+            self._last_amp_reward = style.detach()
+            self._last_policy_reward = mixed.detach()
+            self._reward_stats.append(torch.stack((style.mean(), rewards.mean(), mixed.mean(), logits.mean())))
         self.set_amp_observations(next_states)
         super().process_env_step(mixed, dones, infos)
 
@@ -120,7 +128,7 @@ class AMPPPO(PPO):
             losses.update(zip(("amp_discriminator", "amp_grad_penalty", "amp_policy_prediction", "amp_expert_prediction"),
                               (stats / updates).tolist()))
         if self._reward_stats:
-            losses.update(zip(("amp_style_reward", "amp_task_reward", "amp_mixed_reward"),
+            losses.update(zip(("amp_style_reward", "amp_task_reward", "amp_mixed_reward", "amp_disc_logit"),
                               torch.stack(self._reward_stats).mean(0).tolist()))
             self._reward_stats.clear()
         return losses

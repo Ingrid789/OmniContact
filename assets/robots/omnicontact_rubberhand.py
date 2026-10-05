@@ -56,7 +56,7 @@ G1_GHOST_CFG = ArticulationCfg(
 
 G1_CYLINDER_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        usd_path=asset_path("g1", "g1_29dof_rubberhand-feet_sphere-eef_box-body_capsule.usd"),
+        usd_path=asset_path("g1", "g1_29dof.usd"),
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,

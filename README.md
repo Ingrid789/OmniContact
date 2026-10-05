@@ -77,13 +77,19 @@ git clone --branch v2.1.1 --depth 1 https://github.com/isaac-sim/IsaacLab.git ..
 ```
 
 If you already have an Isaac Lab 2.1.1 checkout, use its `isaaclab.sh` instead.
+The Python interpreter selected in VS Code must use that same checkout. Verify
+the imported path in the active environment with
+`python -c "import isaaclab; print(isaaclab.__file__)"`.
+A newer Isaac Lab checkout can import the RSL-RL 3.x wrapper and report a missing
+`tensordict` module; reinstall the 2.1.1 extensions in that environment to match
+the bundled RSL-RL 2.3.3 fork.
 See the [official installation guide](https://isaac-sim.github.io/IsaacLab/v2.1.1/source/setup/installation/pip_installation.html)
 for system requirements and troubleshooting.
 
-Install **Hugging Face Hub** and the local packages:
+Install the local packages:
 
 ```bash
-python -m pip install "huggingface-hub>=0.34" -e ./rsl_rl -e ./source/omnicontact
+python -m pip install -e ./rsl_rl -e ./source/omnicontact
 ```
 
 The bundled RSL-RL fork provides the AMP and Transformer implementations.
@@ -91,26 +97,30 @@ See [fork details](rsl_rl/UPSTREAM.md) for upstream attribution and local change
 
 ## 📦 Data Preparation
 
-Download `npz_clips` from the
-[Hugging Face dataset](https://huggingface.co/datasets/lightcone02/OmniContact-Dataset/tree/main)
-to `assets/npz_clips/`. Accept the dataset access conditions on Hugging Face
-and run `hf auth login` once, then download from the repository root:
+Download the motion data and simulation assets from
+[Google Drive](https://drive.google.com/drive/folders/16eHSL6t-5u77Vhgpnjt95m_UGz8YxIMJ).
+Extract the downloaded archive and merge its `assets/` directory into the
+repository's `assets/` directory, preserving the Python modules already in the
+repository. If the archive contains a top-level `assets/` directory, extract it
+at the repository root to avoid creating `assets/assets/`.
 
-```bash
-python -m omnicontact.utils.data_download
+The resulting layout should be:
+
+```text
+omnicontact/
+└── assets/
+    ├── data/
+    │   ├── box/
+    │   ├── loco/
+    │   └── soccer/
+    ├── g1/
+    │   ├── g1_29dof.usd
+    │   ├── g1_29dof.urdf
+    │   └── meshes/
+    ├── objects/
+    └── unitree_description/
 ```
-
-Rerunning the command reuses unchanged files. For robot/object USDs and meshes,
-see the [asset layout](assets/README.md).
-
-Convert `assets/npz_clips` to **50 FPS** before training:
-
-```bash
-python -m omnicontact.utils.data_process
-```
-
-Output: `assets/npz_clips_50fps`; originals are preserved. Use this directory
-for training and playback. Add `--overwrite` to regenerate outputs.
+see the [asset layout](assets/README.md) for details.
 
 ## 🧩 Tasks
 
@@ -131,7 +141,7 @@ Start with a small run:
 ```bash
 python scripts/rsl_rl/train.py \
   --task OmniContact-AMP --num_envs 64 --max_iterations 10 \
-  --motion_file_dir assets/npz_clips_50fps \
+  --motion_file_dir assets/data/box/case2_push/push \
   --disable_wandb --headless
 ```
 
@@ -149,14 +159,14 @@ To resume, add `--resume --load_run '<run>' --checkpoint model_4999.pt`.
 ```bash
 python scripts/rsl_rl/play.py \
   --task OmniContact-AMP-play --num_envs 1 \
-  --motion_file_dir /path/to/motion.npz \
+  --motion_file_dir assets/data/box/case2_push/push \
   --checkpoint /path/to/model_4999.pt \
   --disable_wandb --start_frame 0 --stop_on_reset
 ```
 
 Playback also exports `exported/policy.onnx` beside the checkpoint.
-Reference motions are required for playback.
-Use the 50 FPS motions generated in the data preparation step.
+Reference motions are required for playback. Select a motion file or subset
+under `assets/data/` that matches the checkpoint's task.
 
 ## 🧪 Tests
 
@@ -166,5 +176,5 @@ Run in the same environment without launching Isaac Sim:
 python -m pytest tests -q
 ```
 
-Tests cover motion resampling/loading, PPO/AMP, checkpoints and ONNX export.
+Tests cover motion loading and asset labels, PPO/AMP, checkpoints and ONNX export.
 The distributed test requires local socket access.

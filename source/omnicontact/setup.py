@@ -14,7 +14,6 @@ setup(
         "psutil",
         "onnxscript",
         "wandb>=0.19",
-        "huggingface-hub>=0.34",
     ],
     python_requires=">=3.10",
     include_package_data=True,

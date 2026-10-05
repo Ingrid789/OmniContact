@@ -174,6 +174,54 @@ def test_runner_learn_resume_and_inference(tmp_path, amp, transformer):
     runner.writer.close()
 
 
+@pytest.mark.parametrize("amp", [False, True])
+def test_tensorboard_amp_rewards_and_completed_episode_returns(tmp_path, amp):
+    from tensorboard.backend.event_processing.event_accumulator import EventAccumulator
+
+    cfg = configuration(amp=amp)
+    cfg["num_steps_per_env"] = 2
+    cfg["algorithm"].update(learning_rate=0.0, schedule="fixed")
+    runner = OnPolicyRunner(OmniContactVecEnvWrapper(SplitEnv()), cfg, str(tmp_path))
+    if amp:
+        # Constant logit +1 produces style reward 0.5 on non-terminal steps.
+        for parameter in runner.alg.discriminator.parameters():
+            parameter.data.zero_()
+        runner.alg.discriminator.network[-1].bias.data.fill_(1.0)
+    try:
+        runner.learn(3)
+    finally:
+        if runner.writer is not None:
+            runner.writer.close()
+
+    events = EventAccumulator(str(tmp_path)).Reload()
+    tags = events.Tags()["scalars"]
+    total = events.Scalars("Train/mean_reward")
+    # Only env 0 terminates, every third step; episodes span rollout boundaries.
+    # Timeout value bootstrapping must not be counted as an episode reward.
+    assert [event.step for event in total] == [1, 2]
+    assert [event.value for event in total] == pytest.approx([2.8, 2.8] if amp else [3.0, 3.0])
+    if not amp:
+        assert not any(tag.startswith("AMP/") for tag in tags)
+        assert "Episode_Reward/amp_reward" not in tags
+        return
+
+    assert {"AMP/reward", "AMP/task_reward", "AMP/mixed_reward", "AMP/disc_logit", "AMP/loss",
+            "AMP/grad_penalty", "AMP/policy_pred", "AMP/expert_pred", "Episode_Reward/amp_reward",
+            "Train/mean_task_reward", "Train/mean_amp_reward"}.issubset(tags)
+    for tag in ["AMP/reward", "Episode_Reward/amp_reward", "Loss/amp_style_reward"]:
+        assert [event.step for event in events.Scalars(tag)] == [0, 1, 2]
+        assert [event.value for event in events.Scalars(tag)] == pytest.approx([0.5, 0.4375, 0.4375])
+    assert [event.value for event in events.Scalars("AMP/disc_logit")] == pytest.approx([1.0] * 3)
+    task = events.Scalars("Train/mean_task_reward")
+    style = events.Scalars("Train/mean_amp_reward")
+    assert [event.step for event in task] == [1, 2]
+    assert [event.step for event in style] == [1, 2]
+    assert [event.value for event in task] == pytest.approx([3.0, 3.0])
+    assert [event.value for event in style] == pytest.approx([1.0, 1.0])
+    for mixed, tracking, prior in zip(total, task, style):
+        assert mixed.value == pytest.approx(0.9 * tracking.value + 0.1 * prior.value)
+
+
 def test_missing_amp_data_and_history_mismatch_fail():
     with pytest.raises(ValueError, match="expert dataset"):
         OnPolicyRunner(OmniContactVecEnvWrapper(SplitEnv()), {**configuration(), "algorithm": {"class_name": "AMPPPO"}})

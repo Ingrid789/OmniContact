@@ -27,6 +27,8 @@ from isaaclab.utils.math import (
     sample_uniform,
     yaw_quat,
 )
+from omnicontact.utils.motion_labels import asset_label_from_motion_file
+
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
@@ -307,13 +309,13 @@ class MotionCommand(CommandTerm):
 
         # 1. Map each label to a tensor of motion indices.
         unique_labels = set(self.env_asset_labels)
-        motion_ids = [m.motion_id for m in self.motions]
+        motion_labels = [asset_label_from_motion_file(m.motion_file) for m in self.motions]
         print(f"[INFO] Bounding Assets Sampler: Found {len(unique_labels)} unique asset labels.")
 
         for label in unique_labels:
             if label in ["unknown", "no_tag", None]:
                 continue
-            indices = [i for i, m_id in enumerate(motion_ids) if label in m_id]
+            indices = [i for i, motion_label in enumerate(motion_labels) if label == motion_label]
             if len(indices) > 0:
                 self.asset_to_motion_indices[label] = torch.tensor(indices, device=self.device, dtype=torch.long)
             else:
