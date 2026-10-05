@@ -21,7 +21,7 @@ flow for long-horizon tasks. **CFgen** generates task-space references, while
 This repository provides **CFtrack training in Isaac Lab** for the Unitree G1,
 with MLP or Transformer policies.
 
-The **CF-Gen implementation and sim2sim code** are available in
+> 📌 The **CF-Gen implementation and sim2sim code** are available in
 [OmniContact_sim2sim](https://github.com/Ingrid789/OmniContact_sim2sim).
 
 ## ⚙️ Setup
@@ -141,7 +141,7 @@ python -m pytest tests -q
 Tests cover motion loading and asset labels, PPO/AMP, checkpoints and ONNX export.
 The distributed test requires local socket access.
 
-## 🔗 Sim2Sim
+## 📌 Sim2Sim
 
 The **CF-Gen implementation and sim2sim code** are available in
 [OmniContact_sim2sim](https://github.com/Ingrid789/OmniContact_sim2sim).
