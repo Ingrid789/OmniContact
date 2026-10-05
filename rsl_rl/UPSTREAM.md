@@ -4,8 +4,6 @@ Source: https://github.com/leggedrobotics/rsl_rl
 
 Base tag: `v2.3.3`
 
-Base commit: `750e84566d91877a8bbabc7971578be24429bca8`
-
 Local package version: `2.3.3+omnicontact.1`.
 
 This directory was cloned from upstream and is vendored as ordinary source files

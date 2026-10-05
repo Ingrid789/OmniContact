@@ -1,16 +1,15 @@
-"""Asset root configuration for the OmniContact training package."""
+"""Repository asset paths for the OmniContact training package."""
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
 
-ASSET_DIR = os.environ.get("OMNICONTACT_ASSET_DIR", str(Path(__file__).resolve().parent))
+ASSET_DIR = str(Path(__file__).resolve().parent)
 
 
 def asset_path(*parts: str) -> str:
-    """Return an absolute path below the configured asset root."""
+    """Return an absolute path below the repository's assets directory."""
 
     return str(Path(ASSET_DIR, *parts))
 

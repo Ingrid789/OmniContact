@@ -50,9 +50,12 @@ flow for long-horizon tasks. **CFgen** generates task-space references, while
 This repository provides **CFtrack training in Isaac Lab** for the Unitree G1,
 with MLP or Transformer policies.
 
+The **CF-Gen implementation and sim2sim code** are available in
+[OmniContact_sim2sim](https://github.com/Ingrid789/OmniContact_sim2sim).
+
 ## ⚙️ Setup
 
-Run the following commands from the repository root (Linux).
+Run the following commands from the repository roota.
 
 Create and activate the Python environment:
 
@@ -76,15 +79,8 @@ git clone --branch v2.1.1 --depth 1 https://github.com/isaac-sim/IsaacLab.git ..
 ../IsaacLab/isaaclab.sh --install none
 ```
 
-If you already have an Isaac Lab 2.1.1 checkout, use its `isaaclab.sh` instead.
-The Python interpreter selected in VS Code must use that same checkout. Verify
-the imported path in the active environment with
-`python -c "import isaaclab; print(isaaclab.__file__)"`.
-A newer Isaac Lab checkout can import the RSL-RL 3.x wrapper and report a missing
-`tensordict` module; reinstall the 2.1.1 extensions in that environment to match
-the bundled RSL-RL 2.3.3 fork.
-See the [official installation guide](https://isaac-sim.github.io/IsaacLab/v2.1.1/source/setup/installation/pip_installation.html)
-for system requirements and troubleshooting.
+Use Isaac Lab **2.1.1** in your active Python environment, including VS Code.
+See the [installation guide](https://isaac-sim.github.io/IsaacLab/v2.1.1/source/setup/installation/pip_installation.html) for details.
 
 Install the local packages:
 
@@ -97,12 +93,8 @@ See [fork details](rsl_rl/UPSTREAM.md) for upstream attribution and local change
 
 ## 📦 Data Preparation
 
-Download the motion data and simulation assets from
-[Google Drive](https://drive.google.com/drive/folders/16eHSL6t-5u77Vhgpnjt95m_UGz8YxIMJ).
-Extract the downloaded archive and merge its `assets/` directory into the
-repository's `assets/` directory, preserving the Python modules already in the
-repository. If the archive contains a top-level `assets/` directory, extract it
-at the repository root to avoid creating `assets/assets/`.
+Download the assets from [Google Drive](https://drive.google.com/drive/folders/16eHSL6t-5u77Vhgpnjt95m_UGz8YxIMJ)
+and merge them into `assets/`, keeping existing Python files.
 
 The resulting layout should be:
 
@@ -120,7 +112,6 @@ omnicontact/
     ├── objects/
     └── unitree_description/
 ```
-see the [asset layout](assets/README.md) for details.
 
 ## 🧩 Tasks
 
@@ -178,3 +169,8 @@ python -m pytest tests -q
 
 Tests cover motion loading and asset labels, PPO/AMP, checkpoints and ONNX export.
 The distributed test requires local socket access.
+
+## 🔗 Sim2Sim
+
+The **CF-Gen implementation and sim2sim code** are available in
+[OmniContact_sim2sim](https://github.com/Ingrid789/OmniContact_sim2sim).

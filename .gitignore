@@ -1,41 +1,19 @@
-# Keep tests/, rsl_rl/, and asset-loading Python code under version control.
-
 # Python bytecode and packaging
 __pycache__/
 *.py[cod]
 *.egg-info/
-*.egg
-.eggs/
 build/
 dist/
 
 # Local virtual environments
 .venv/
 venv/
-/env/
-/ENV/
 
-# Test, coverage, and code-analysis caches
+# Test cache
 .pytest_cache/
-.mypy_cache/
-.ruff_cache/
-.pytype/
-.tox/
-.nox/
-.hypothesis/
-.coverage
-.coverage.*
-htmlcov/
-/coverage.xml
-.ipynb_checkpoints/
 
-# IDE and OS
-.DS_Store
-Thumbs.db
-.idea/
+# VS Code
 .vscode/
-*.swp
-*.swo
 
 # Local environment, credentials, and assistant settings
 .env
@@ -50,33 +28,21 @@ Thumbs.db
 .cache/
 *.dmp
 .thumbs/
-/_isaac_sim*/
-/_repo/
-/_build/
-.lastformat
 
 # Training and recording outputs
 /logs/
 /outputs/
-/test_runs/
-/recordings/
-/videos/
 wandb/
 *.log
 *.tfevents.*
 
 # Model checkpoints and exports
 *.pt
-*.pth
-*.ckpt
 *.onnx
 
 # External motion datasets
-/motions/
-/data/
 /assets/data/
-/assets/npz_clips/
-/assets/npz_clips_50fps/
+/assets/test/
 
 # External simulation assets; keep assets/*.py, robots/, and bundled URDFs.
 /assets/objects/*
