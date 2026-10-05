@@ -50,11 +50,14 @@ class MotionLoader:
         self._object_quat_w = torch.tensor(data["object_quat_w"], dtype=torch.float32, device=device)
         self._object_lin_vel_w = torch.tensor(data["object_lin_vel_w"], dtype=torch.float32, device=device)
         self._object_ang_vel_w = torch.tensor(data["object_ang_vel_w"], dtype=torch.float32, device=device)
-        self._table1_pos_w = torch.tensor(data["table1_pos_w"], dtype=torch.float32, device=device)
-        if "table2_pos_w" in data.files:
-            self._table2_pos_w = torch.tensor(data["table2_pos_w"], dtype=torch.float32, device=device)
-        else:
-            torch.zeros_like(self._table1_pos_w)
+        # Missing tables use a constant position five metres below the ground.
+        for key in ("table1_pos_w", "table2_pos_w"):
+            if key in data.files:
+                table_pos = torch.tensor(data[key], dtype=torch.float32, device=device)
+            else:
+                table_pos = torch.zeros((self.joint_pos.shape[0], 3), dtype=torch.float32, device=device)
+                table_pos[:, 2] = -5.0
+            setattr(self, f"_{key}", table_pos)
         # Optional: contact info for (left_foot, right_foot, left_hand, right_hand)
         # Shape: (nframes, 4), values are typically {0, 1}.
         if "contact_info" in data.files:

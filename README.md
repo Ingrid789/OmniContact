@@ -103,6 +103,15 @@ python -m omnicontact.utils.data_download
 Rerunning the command reuses unchanged files. For robot/object USDs and meshes,
 see the [asset layout](assets/README.md).
 
+Convert `assets/npz_clips` to **50 FPS** before training:
+
+```bash
+python -m omnicontact.utils.data_process
+```
+
+Output: `assets/npz_clips_50fps`; originals are preserved. Use this directory
+for training and playback. Add `--overwrite` to regenerate outputs.
+
 ## 🧩 Tasks
 
 | Training task | Algorithm | Policy |
@@ -122,7 +131,7 @@ Start with a small run:
 ```bash
 python scripts/rsl_rl/train.py \
   --task OmniContact-AMP --num_envs 64 --max_iterations 10 \
-  --motion_file_dir assets/npz_clips \
+  --motion_file_dir assets/npz_clips_50fps \
   --disable_wandb --headless
 ```
 
@@ -147,6 +156,7 @@ python scripts/rsl_rl/play.py \
 
 Playback also exports `exported/policy.onnx` beside the checkpoint.
 Reference motions are required for playback.
+Use the 50 FPS motions generated in the data preparation step.
 
 ## 🧪 Tests
 
@@ -156,5 +166,5 @@ Run in the same environment without launching Isaac Sim:
 python -m pytest tests -q
 ```
 
-Tests cover motion loading, PPO/AMP, checkpoints and ONNX export.
+Tests cover motion resampling/loading, PPO/AMP, checkpoints and ONNX export.
 The distributed test requires local socket access.
