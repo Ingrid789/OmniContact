@@ -88,6 +88,16 @@ omnicontact/
     └── unitree_description/
 ```
 
+After preparing the data, run the tests in the same environment without launching
+Isaac Sim:
+
+```bash
+python -m pytest tests -q
+```
+
+Tests cover motion loading and asset labels, PPO/AMP, checkpoints and ONNX export.
+The distributed test requires local socket access.
+
 ## 🧩 Tasks
 
 | Training task | Algorithm | Policy |
@@ -122,6 +132,14 @@ To resume, add `--resume --load_run '<run>' --checkpoint model_4999.pt`.
 
 ## ▶️ Play and export
 
+We provide two types of pretrained CFtrack checkpoints on
+[Google Drive](https://drive.google.com/drive/folders/1hN6eStd3jRfQTDbMaXl4DrwxZwcdA1Jk?usp=drive_link):
+
+- **MLP**: `OmniContact_MLP/`
+- **Transformer**: `OmniContact_Transformer/`
+
+You can also use your own trained checkpoint. Example for AMP + Transformer:
+
 ```bash
 python scripts/rsl_rl/play.py \
   --task OmniContact-AMP-Transformer-play --num_envs 1 \
@@ -130,20 +148,15 @@ python scripts/rsl_rl/play.py \
   --disable_wandb --start_frame 0 --stop_on_reset
 ```
 
-Playback also exports `exported/policy.onnx` beside the checkpoint.
-Reference motions are required for playback. Select a motion file or subset
-under `assets/data/` that matches the checkpoint's task.
+> **Notes:**
+>
+> - Set `--checkpoint` to your local `.pt` file.
+> - Match `--task` to the checkpoint's training task and architecture; append `-play`.
+> - Set `--motion_file_dir` to a matching `.npz` file or directory
+>   (see [Data Preparation](#-data-preparation)).
 
-## 🧪 Tests
-
-Run in the same environment without launching Isaac Sim:
-
-```bash
-python -m pytest tests -q
-```
-
-Tests cover motion loading and asset labels, PPO/AMP, checkpoints and ONNX export.
-The distributed test requires local socket access.
+Playback automatically exports the policy to `exported/policy.onnx` in the
+checkpoint's parent directory.
 
 ## 📌 Sim2Sim
 
