@@ -594,15 +594,22 @@ class BaseEnvPlayCfg(BaseEnvCfg):
         self.observations.policy_command.enable_corruption = False
         self.observations.policy_proprio.enable_corruption = False
 
-        # Use the assets' configured physical properties without randomization.
         self.events.physics_material = None
         self.events.robot_joint_stiffness_and_damping = None
         self.events.torso_rpy_obs_bias = None
         self.events.add_joint_default_pos = None
         self.events.base_com = None
         self.events.push_robot = None
-        self.events.box_physics_material = None
         self.events.box_scale_mass = None
+
+        # Fix label-specific friction at training midpoints for repeatable play.
+        if self.events.box_physics_material is not None:
+            material_params = self.events.box_physics_material.params
+            for name, bounds in material_params.items():
+                if name.endswith("_friction_range") or name == "restitution_range":
+                    midpoint = 0.5 * (bounds[0] + bounds[1])
+                    material_params[name] = (midpoint, midpoint)
+            material_params["num_buckets"] = 1
 
         # Reset directly to the reference state without pose or velocity noise.
         self.commands.motion.pose_range = {}
