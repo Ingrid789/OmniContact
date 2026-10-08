@@ -12,6 +12,10 @@
   <a href="https://huggingface.co/datasets/lightcone02/OmniContact-Dataset"><img src="https://img.shields.io/badge/Dataset-Hugging%20Face-yellow" alt="Dataset"></a>
 </p>
 
+<p align="center">
+  <img src="docs/media/omnicontact-teaser.gif" alt="OmniContact teaser" width="100%">
+</p>
+
 ---
 
 OmniContact chains humanoid locomotion and manipulation skills through contact
