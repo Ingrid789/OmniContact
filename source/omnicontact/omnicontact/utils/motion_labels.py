@@ -12,7 +12,9 @@ _BOX_PATTERN = re.compile(
     rf"(?P<task>carry|push|slide)_box_(?P<size>{_BOX_SIZE})_{_CLIP_SUFFIX}\.npz", re.IGNORECASE
 )
 _LOCO_PATTERN = re.compile(rf"loco_box_(?P<size>{_BOX_SIZE})_.+\.npz", re.IGNORECASE)
-_SOCCER_PATTERN = re.compile(rf"relocate_soccer_(?P<size>\d+)_{_CLIP_SUFFIX}\.npz", re.IGNORECASE)
+_SOCCER_PATTERN = re.compile(
+    rf"(?:(?:relocate|pkick)_soccer|kick_ball)_(?P<size>\d+)_{_CLIP_SUFFIX}\.npz", re.IGNORECASE
+)
 
 
 def asset_label_from_motion_file(motion_file: str | Path) -> str | None:

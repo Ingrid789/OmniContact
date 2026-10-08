@@ -18,6 +18,11 @@ from omnicontact.utils.motion_labels import asset_label_from_motion_file
         ("loco_box_37-42-56_backward_motion48.npz", "37-42-56"),
         ("loco_box_37-42-56_loco_walkturnleft90_4_with_contact.npz", "37-42-56"),
         ("relocate_soccer_22_001.npz", "soccer_22"),
+        ("kick_ball_22_266128_000.npz", "soccer_22"),
+        ("KICK_BALL_22_001.NPZ", "soccer_22"),
+        ("kick_ball_20_001.npz", "soccer_20"),
+        ("pkick_soccer_22_206148_000.npz", "soccer_22"),
+        ("PKICK_SOCCER_20_001.NPZ", "soccer_20"),
         ("/data/push_box_30-30-30/carry_box_37-42-56_001.npz", "37-42-56"),
         (Path("/data/push_box_37-42-56_001.npz"), "push_37-42-56"),
     ],
@@ -46,6 +51,9 @@ def test_push_identity_is_distinct_from_other_tasks_and_similar_dimensions():
         "push_box_37-42_001.npz",
         "push_box_37-42-56-78_001.npz",
         "push_box_37-42-56_001.npz.bak",
+        "kick_ball_22_266128_000.npz.bak",
+        "kick_ball_22-22-22_000.npz",
+        "pkick_soccer_22_206148_000.npz.bak",
     ],
 )
 def test_unrecognized_filename_has_no_asset_label(filename):

@@ -102,7 +102,7 @@ Start with a small run:
 
 ```bash
 python scripts/rsl_rl/train.py \
-  --task OmniContact-AMP --num_envs 64 --max_iterations 10 \
+  --task OmniContact-AMP-Transformer --num_envs 64 --max_iterations 10 \
   --motion_file_dir assets/data/box/case2_push/push \
   --disable_wandb --headless
 ```
@@ -120,7 +120,7 @@ To resume, add `--resume --load_run '<run>' --checkpoint model_4999.pt`.
 
 ```bash
 python scripts/rsl_rl/play.py \
-  --task OmniContact-AMP-play --num_envs 1 \
+  --task OmniContact-AMP-Transformer-play --num_envs 1 \
   --motion_file_dir assets/data/box/case2_push/push \
   --checkpoint /path/to/model_4999.pt \
   --disable_wandb --start_frame 0 --stop_on_reset
