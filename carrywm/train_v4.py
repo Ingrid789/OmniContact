@@ -39,28 +39,41 @@ def configure(parser):
                         cfgen_goal_noise_std_m=0., collect_steps=5, eval_episodes=3)
 
 
-def args_from_cli(argv=None):
-    args = base.args_from_cli(argv, configure=configure)
+def args_from_cli(argv=None, *, configure_parser=configure):
+    args = base.args_from_cli(argv, configure=configure_parser)
     if (args.num_envs != NUM_ENVS or args.collect_steps != 5 or args.wm_batch_size != train_v3.WM_BATCH
             or args.batch_size != ACTOR_BATCH or args.auto_batch):
-        raise ValueError('V4 uses 5 × 1024 real transitions, 10 × 1024 WM windows and 2048 actor rollouts')
+        raise ValueError('The vector trainer uses 5 × 1024 real transitions, 10 × 1024 WM windows and 2048 actor rollouts')
     if (args.cfgen_goal_noise_std_m != 0 or args.warmup_teacher or args.teacher_probability != 0
             or args.wm_pretrain != 0 or not 1 <= args.actor_microbatch <= ACTOR_BATCH
             or args.critic_chunk < 1):
-        raise ValueError('V4 uses on-policy warmup, zero CF-Gen goal noise and positive physical minibatches')
+        raise ValueError('The vector trainer uses on-policy warmup, zero CF-Gen goal noise and positive physical minibatches')
     if args.capacity // args.num_envs < base.WM_STEPS or torch.device(args.device).type != 'cuda':
-        raise ValueError('V4 requires CUDA and room for at least eight transitions per world')
+        raise ValueError('The vector trainer requires CUDA and room for at least eight transitions per world')
     return args
 
 
-def train(args):
+def train(args, *, version=4, learner_type=LearnerV3):
     args.output_dir.mkdir(parents=True, exist_ok=True)
     with (args.output_dir / 'run.lock').open('a') as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        _run(args)
+        _run(args, version, learner_type)
 
 
-def _run(args):
+def check_resume(ck, args, version):
+    if ck['version'] != version:
+        raise ValueError(f"Cannot resume V{ck['version']} using V{version}")
+    if ck['iteration'] >= args.iterations:
+        raise ValueError('--iterations must exceed the saved iteration')
+    keys = ('num_envs', 'capacity', 'cfgen_ratio', 'action_noise', 'goal_mode', 'seed')
+    if version == 5:
+        keys += ('termination_height_m', 'termination_gravity_z', 'termination_softness', 'critic_value_max', 'drop_penalty')
+    for key in keys:
+        if ck['config'][key] != getattr(args, key):
+            raise ValueError(f'--resume requires the saved {key} value')
+
+
+def _run(args, version, learner_type):
     from .collector_v4 import VectorCollector
     from .replay_v4 import VectorReplay
     from .warp_sim import WarpCarryWorlds
@@ -79,18 +92,14 @@ def _run(args):
     np.random.seed(args.seed)
     random.seed(args.seed)
     rng = np.random.default_rng(args.seed)
-    net = LearnerV3(args)
+    net = learner_type(args)
     clock = UpdateClock(args.num_envs)
     first, elapsed, old_steps, old_ticks = 1, 0., 0, 0
     peak_alloc = peak_reserved = 0
     episodes = {}
     if args.resume:
         ck = torch.load(args.resume, map_location='cpu', weights_only=False)
-        if ck['version'] != 4 or ck['iteration'] >= args.iterations:
-            raise ValueError('Resume requires a V4 checkpoint earlier than --iterations')
-        for key in ('num_envs', 'capacity', 'cfgen_ratio', 'action_noise', 'goal_mode', 'seed'):
-            if ck['config'][key] != getattr(args, key):
-                raise ValueError(f'--resume requires the saved {key} value')
+        check_resume(ck, args, version)
         for model, state in zip(net.models, ck['models']):
             model.load_state_dict(state)
         for optimizer, state in zip(net.optimizers, ck['optimizers']):
@@ -115,7 +124,7 @@ def _run(args):
     collector = VectorCollector(env, net, replay, rng)
     collector.episodes.update(episodes)
     config = {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()}
-    config.update(version=4, replay_ratio=REPLAY_RATIO, wm_horizon=base.WM_STEPS,
+    config.update(version=version, replay_ratio=REPLAY_RATIO, wm_horizon=base.WM_STEPS,
                   actor_horizon=base.HORIZON, physics='mujoco_warp', torch=str(torch.__version__),
                   hardware=torch.cuda.get_device_name(device))
     (output / ('resume-config.json' if args.resume else 'config.json')).write_text(json.dumps(config, indent=2) + '\n')
@@ -127,7 +136,7 @@ def _run(args):
         print(line, flush=True)
 
     def save(iteration):
-        base.atomic_save(dict(version=4, iteration=iteration, elapsed=elapsed + time.monotonic() - start,
+        base.atomic_save(dict(version=version, iteration=iteration, elapsed=elapsed + time.monotonic() - start,
                               real_steps=old_steps + collector.steps, control_ticks=old_ticks + collector.steps // args.num_envs,
                               models=[m.state_dict() for m in net.models], optimizers=[o.state_dict() for o in net.optimizers],
                               replay=replay, credit=clock.credit, rng=rng.bit_generator.state,

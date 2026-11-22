@@ -41,6 +41,7 @@ class LearnerV3(Learner):
             ]).reshape(HORIZON+1, count)
             targets = lambda_returns(torch.stack(rewards), old[1:],
                                      torch.stack(continuations))
+            targets = self._limit_return(targets)
             examples = CriticBatch(states[:-count], goals[:-count], contexts[:-count], targets.flatten(),
                                    torch.stack(masks).flatten().bool())
             return examples, ret.detach().sum(), mask.sum()

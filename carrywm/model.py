@@ -21,6 +21,13 @@ OBS_DIM = 141
 GOAL_DIM = 113
 ACTION_DIM = 29
 
+# Each of these tracking terms is a weighted exponential bounded by its weight.
+TRACKING_REWARD_WEIGHTS = {
+    "anchor_pos": .2, "anchor_rot": .2, "body_pos": .2, "body_rot": .2,
+    "wrist_pos": .4, "wrist_rot": .4, "box_pos": 1., "box_rot": 1.,
+    "interaction_pos": .4, "interaction_rot": .4, "contact": 1.,
+}
+
 
 def quat_mul(a, b):
     aw, av = a[..., :1], a[..., 1:]
@@ -348,18 +355,19 @@ class CarryGeometry(nn.Module):
         feet = fk.index_select(-3,self.feet_ids)[..., :2,3]
         last_feet = prev_fk.index_select(-3,self.feet_ids)[..., :2,3]
         feet_speed = (feet-last_feet).norm(dim=-1)/DT
+        w = TRACKING_REWARD_WEIGHTS
         terms = {
-            "anchor_pos": .2*torch.exp(-(anchor-ref_anchor).square().sum(-1)/.3**2),
-            "anchor_rot": .2*torch.exp(-_rotation_error(arot,ref_arot).square()/.4**2),
-            "body_pos": .2*torch.exp(-(ref_bp-bodies[..., :3,3]).square().sum(-1).mean(-1)/.3**2),
-            "body_rot": .2*torch.exp(-_rotation_error(ref_br,bodies[..., :3,:3]).square().mean(-1)/.4**2),
-            "wrist_pos": .4*torch.exp(-(ref_pos[..., :2,:]-pos[..., :2,:]).square().sum(-1).mean(-1)/.3**2),
-            "wrist_rot": .4*torch.exp(-_rotation_error(ref_rot[..., :2,:,:],rot[..., :2,:,:]).square().mean(-1)/.4**2),
-            "box_pos": torch.exp(-(box_p-target_box_p).square().sum(-1)/.3**2),
-            "box_rot": torch.exp(-_rotation_error(box_r,target_box_r).square()/.3**2),
-            "interaction_pos": .4*torch.exp(-grip_p_error*weight.square()/.3**2).mean(-1),
-            "interaction_rot": .4*torch.exp(-(grip_angle-ref_grip_angle).square()*weight.square()/.3**2).mean(-1),
-            "contact": torch.exp(-(contacts[..., :4]-target[..., 35:39]).square().mean(-1)),
+            "anchor_pos": w["anchor_pos"]*torch.exp(-(anchor-ref_anchor).square().sum(-1)/.3**2),
+            "anchor_rot": w["anchor_rot"]*torch.exp(-_rotation_error(arot,ref_arot).square()/.4**2),
+            "body_pos": w["body_pos"]*torch.exp(-(ref_bp-bodies[..., :3,3]).square().sum(-1).mean(-1)/.3**2),
+            "body_rot": w["body_rot"]*torch.exp(-_rotation_error(ref_br,bodies[..., :3,:3]).square().mean(-1)/.4**2),
+            "wrist_pos": w["wrist_pos"]*torch.exp(-(ref_pos[..., :2,:]-pos[..., :2,:]).square().sum(-1).mean(-1)/.3**2),
+            "wrist_rot": w["wrist_rot"]*torch.exp(-_rotation_error(ref_rot[..., :2,:,:],rot[..., :2,:,:]).square().mean(-1)/.4**2),
+            "box_pos": w["box_pos"]*torch.exp(-(box_p-target_box_p).square().sum(-1)/.3**2),
+            "box_rot": w["box_rot"]*torch.exp(-_rotation_error(box_r,target_box_r).square()/.3**2),
+            "interaction_pos": w["interaction_pos"]*torch.exp(-grip_p_error*weight.square()/.3**2).mean(-1),
+            "interaction_rot": w["interaction_rot"]*torch.exp(-(grip_angle-ref_grip_angle).square()*weight.square()/.3**2).mean(-1),
+            "contact": w["contact"]*torch.exp(-(contacts[..., :4]-target[..., 35:39]).square().mean(-1)),
             "action_rate": -.1*(action-prev_action).square().sum(-1),
             "arm_torque": -.005*torque.index_select(-1,self.arm_ids).square().sum(-1),
             "joint_limit": -10.*limits.sum(-1),

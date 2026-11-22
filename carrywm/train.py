@@ -158,8 +158,16 @@ class Learner:
         with self.autocast():
             return self.critic(states, goals, contexts).reshape(-1).float()
 
+    def _continuation(self, after, target, task_alive):
+        fallen = (after[:, 2] - target[:, 99]).abs() > .5
+        valid = task_alive & ~fallen
+        return valid.float(), valid
+
+    def _limit_return(self, value):
+        return value
+
     def _rollout(self, inputs, *, update_stats=False, checkpoint_encoder=False):
-        """Closed-loop V2/V3 imagination; caller owns freezing and optimizer steps."""
+        """Closed-loop imagination; caller owns freezing and optimizer steps."""
         state, prev, ctx, hist, raw, remaining = inputs
         batch_size = len(state)
         target_fk = self.geo.fk_from_target(raw[:, 1:HORIZON+1].reshape(-1, 111))
@@ -168,14 +176,15 @@ class Learner:
         goal = self.reference(state, raw[:, self.offsets], fk=fk)
         if update_stats:
             self.actor.update_stats(goal.detach(), hist)
-        states, goals, rewards, continuations, weights = [], [], [], [], []
+        states, goals, rewards, continuations, valid_rows = [], [], [], [], []
         mask = torch.ones_like(remaining)
+        in_episode = torch.ones_like(remaining, dtype=torch.bool)
         slip_frames = torch.zeros_like(remaining)
         ret = torch.zeros_like(remaining)
         for j in range(HORIZON):
             states.append(state.detach())
             goals.append(goal.detach())
-            weights.append(mask)
+            valid_rows.append(in_episode)
             with self.autocast():
                 action = self.actor(goal, hist, checkpoint_encoder=checkpoint_encoder).float().clamp(-10, 10)
                 after, logits = self.wm(state, action, ctx)
@@ -191,23 +200,24 @@ class Learner:
             lost = expects_hold & (contacts[:, 2:4].mean(-1) < .5)
             slip_frames = torch.where(lost, slip_frames+1, 0.)
             dropped = (slip_frames >= 3) & (after[:, 73] < target[:, 106]-.15)
-            fallen = (after[:, 2] - target[:, 99]).abs() > .5
             bad_box = (after[:, 73] - target[:, 106]).abs() > .5
-            cont = (~(dropped | fallen | bad_box) & (remaining > j+1)).float()
+            task_alive = ~(dropped | bad_box) & (remaining > j+1)
+            cont, within_boundary = self._continuation(after, target, task_alive)
             reward = reward - self.args.drop_penalty * dropped.float()
             rewards.append(reward.detach())
-            continuations.append(cont)
+            continuations.append(cont.detach())
             ret = ret + (GAMMA**j) * mask * reward
             mask = mask * cont
+            in_episode = in_episode & within_boundary
             obs = self.geo.observation(after, action, ctx, fk=next_fk)
             hist = torch.cat([hist[:, 1:], obs[:, None]], dim=1)
             state, prev, fk = after, action, next_fk
             goal = self.reference(state, raw[:, j+1+self.offsets], fk=fk)
-        terminal = self._value(state, goal, ctx)
+        terminal = self._limit_return(self._value(state, goal, ctx))
         ret = ret + (GAMMA**HORIZON)*mask*terminal
         states.append(state.detach())
         goals.append(goal.detach())
-        return ret, mask, states, goals, rewards, continuations, weights
+        return ret, mask, states, goals, rewards, continuations, valid_rows
 
     def policy_update(self, replay, batch_size):
         inputs = tuple(tensor(v, self.device) for v in replay.actor(batch_size, HORIZON))

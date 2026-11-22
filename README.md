@@ -44,6 +44,8 @@ command. The checked-out branch sets the default training-goal noise.
 
 V4 trains on 1024 MuJoCo Warp worlds with a replay ratio of 16 and 2048 imagined actor trajectories per update. [V4 采集、训练和启动说明](docs/carry-wm-v4.md)
 
+V5 uses the probability of pelvis tracking failure to weight imagined returns and bounds the critic bootstrap and targets. [V5 终止与回报计算](docs/carry-wm-v5.md)
+
 > 📌 The **CF-Gen implementation and sim2sim code** are available in
 [OmniContact_sim2sim](https://github.com/Ingrid789/OmniContact_sim2sim).
 
