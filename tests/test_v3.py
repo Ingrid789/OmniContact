@@ -73,7 +73,7 @@ class UpdateScheduleTests(unittest.TestCase):
         self.assertEqual((args.wm_batch_size, args.batch_size, args.actor_microbatch),
                          (1024, 4096, 4096))
         self.assertTrue(args.checkpoint_encoder)
-        self.assertEqual(args.cfgen_goal_noise_std_m, .005)
+        self.assertEqual(args.cfgen_goal_noise_std_m, 0.)
         for std in (0., .005):
             with self.subTest(std=std):
                 experiment = args_from_cli(common + ["--cfgen-goal-noise-std-m", str(std)])

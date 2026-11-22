@@ -2,7 +2,6 @@
 import argparse
 
 from . import train as base
-from .sim import DEFAULT_CFGEN_GOAL_NOISE_STD_M
 from .v3 import LearnerV3
 
 
@@ -26,7 +25,7 @@ def configure(parser):
     parser.description = __doc__
     parser.set_defaults(batch_size=ACTOR_BATCH, wm_batch_size=WM_BATCH,
                         warmup_steps=4096, warmup_teacher=False, wm_pretrain=0)
-    parser.add_argument("--cfgen-goal-noise-std-m", type=float, default=DEFAULT_CFGEN_GOAL_NOISE_STD_M,
+    parser.add_argument("--cfgen-goal-noise-std-m", type=float, default=0.0,
                         help="Std dev in metres of the training CF-Gen placement goal's XY noise; "
                              "0 disables this noise while retaining the table-support constraint")
     parser.add_argument("--actor-microbatch", type=int, default=ACTOR_BATCH,
