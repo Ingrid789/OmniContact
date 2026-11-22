@@ -1,17 +1,21 @@
 """Train CF-Track in a learned differentiable model of a MuJoCo carry scene."""
 import argparse
 from collections import Counter
+from concurrent.futures import ProcessPoolExecutor
 from contextlib import contextmanager, nullcontext
 import fcntl
 import json
+import multiprocessing as mp
 import os
 from pathlib import Path
 import random
 import time
+import warnings
 
 import numpy as np
 import torch
 
+from .data import split_paths
 from .model import Actor, Critic, WorldModel, CarryGeometry, world_loss
 from .replay import Replay, array
 from .sim import CarryEnv, DEFAULT_CFGEN_GOAL_NOISE_STD_M
@@ -125,7 +129,22 @@ class Learner:
         self.wm = WorldModel(context_dim, width=args.wm_width).to(self.device)
         self.critic = Critic(context_dim).to(self.device)
         self.models = [self.wm, self.actor, self.critic]
-        self.optimizers = [torch.optim.Adam(m.parameters(), lr=args.lr) for m in self.models]
+        adam_kw = {"fused": True} if self.device.type == "cuda" else {}
+        self.optimizers = [torch.optim.Adam(m.parameters(), lr=args.lr, **adam_kw) for m in self.models]
+        self._step_offsets = torch.arange(1, HORIZON + 1, device=self.device)[:, None] + self.offsets[None, :]
+        self._step_numbers = torch.arange(1, HORIZON + 1, dtype=torch.float32, device=self.device)
+        self._compiled_wm_loss = self._wm_rollout_loss
+        self._compiled_imagine_step = self._imagine_step
+        self._compiled_critic = self.critic
+        self._compiled_collect_act = self._collect_act_impl
+        if getattr(args, "compile", False) and self.device.type == "cuda":
+            try:
+                self._compiled_wm_loss = torch.compile(self._wm_rollout_loss)
+                self._compiled_imagine_step = torch.compile(self._imagine_step)
+                self._compiled_critic = torch.compile(self.critic, dynamic=True)
+                self._compiled_collect_act = torch.compile(self._collect_act_impl)
+            except Exception as exc:
+                warnings.warn(f"torch.compile unavailable, running eager mode: {exc}", RuntimeWarning)
 
     def autocast(self):
         if self.args.precision == "bf16":
@@ -138,25 +157,44 @@ class Learner:
             goal = torch.cat((goal[..., :49], torch.zeros_like(goal[..., 49:])), dim=-1)
         return goal
 
-    def wm_update(self, replay, batch_size):
-        s, a, c, ctx = (tensor(v, self.device) for v in replay.wm(batch_size, WM_STEPS))
-        self.wm.update_stats(s[:, :-1].reshape(-1, 84), a.reshape(-1, 29),
-                             ctx[:, None].expand(-1, WM_STEPS, -1).reshape(-1, ctx.shape[-1]))
+    def _collect_act_impl(self, state, prev, ctx, raw_win, hist, fresh_mask):
+        obs = self.geo.observation(state, prev, ctx)
+        shifted = torch.cat((hist[:, 1:], obs[:, None]), dim=1)
+        new_hist = torch.where(fresh_mask[:, None, None], obs[:, None].expand(-1, 10, -1), shifted)
+        goal = self.reference(state, raw_win)
+        with self.autocast():
+            actions = self.actor(goal, new_hist).float()
+        return obs, new_hist, actions
+
+    def collect_act(self, state, prev, ctx, raw_win, hist, fresh_mask):
+        fn = getattr(self, "_compiled_collect_act", self._collect_act_impl)
+        return fn(state, prev, ctx, raw_win, hist, fresh_mask)
+
+    def _wm_rollout_loss(self, s, a, c, ctx):
         state = s[:, 0]
-        loss = torch.zeros((), device=self.device)
+        loss = torch.zeros((), device=s.device)
         for j in range(WM_STEPS):
             with self.autocast():
                 state, logits = self.wm(state, a[:, j], ctx)
             state = state.float()
             loss = loss + world_loss(state, s[:, j+1], logits.float(), c[:, j])
         loss = loss / WM_STEPS
+        return loss, state
+
+    def wm_update(self, replay, batch_size):
+        s, a, c, ctx = (tensor(v, self.device) for v in replay.wm(batch_size, WM_STEPS))
+        self.wm.update_stats(s[:, :-1].reshape(-1, 84), a.reshape(-1, 29),
+                             ctx[:, None].expand(-1, WM_STEPS, -1).reshape(-1, ctx.shape[-1]))
+        fn = getattr(self, "_compiled_wm_loss", self._wm_rollout_loss)
+        loss, state = fn(s, a, c, ctx)
         update(self.optimizers[0], self.wm, loss)
         return {"wm/loss": float(loss.detach()),
                 "wm/box_8step_m": (state[:, 71:74]-s[:, -1, 71:74]).norm(dim=-1).mean().item()}
 
     def _value(self, states, goals, contexts):
+        critic_fn = getattr(self, "_compiled_critic", self.critic)
         with self.autocast():
-            return self.critic(states, goals, contexts).reshape(-1).float()
+            return critic_fn(states, goals, contexts).reshape(-1).float()
 
     def _continuation(self, after, target, task_alive):
         fallen = (after[:, 2] - target[:, 99]).abs() > .5
@@ -165,6 +203,31 @@ class Learner:
 
     def _limit_return(self, value):
         return value
+
+    def _imagine_step(self, state, prev, ctx, hist, goal, fk, target, raw_next_win,
+                      target_fk_j, slip_frames, step_num_next, remaining, checkpoint_encoder=False):
+        with self.autocast():
+            action = self.actor(goal, hist, checkpoint_encoder=checkpoint_encoder).float().clamp(-10, 10)
+            after, logits = self.wm(state, action, ctx)
+        after = after.float()
+        contacts = logits.float().sigmoid()
+        next_fk = self.geo.forward_kinematics(after)
+        reward = self.geo.reward(state, after, prev, action, target, contacts,
+                                 prev_fk=fk, fk=next_fk, target_fk=target_fk_j).reshape(-1)
+        # Consecutive inferred hand loss and a substantially descended box
+        # distinguish a confirmed drop from brief loss of a contact.
+        expects_hold = target[:, 37:39].mean(-1) > .5
+        lost = expects_hold & (contacts[:, 2:4].mean(-1) < .5)
+        slip_frames = torch.where(lost, slip_frames+1, 0.)
+        dropped = (slip_frames >= 3) & (after[:, 73] < target[:, 106]-.15)
+        bad_box = (after[:, 73] - target[:, 106]).abs() > .5
+        task_alive = ~(dropped | bad_box) & (remaining > step_num_next)
+        cont, within_boundary = self._continuation(after, target, task_alive)
+        reward = reward - self.args.drop_penalty * dropped.float()
+        obs = self.geo.observation(after, action, ctx, fk=next_fk)
+        next_hist = torch.cat([hist[:, 1:], obs[:, None]], dim=1)
+        next_goal = self.reference(after, raw_next_win, fk=next_fk)
+        return after, action, next_fk, next_goal, next_hist, reward, cont, within_boundary, slip_frames
 
     def _rollout(self, inputs, *, update_stats=False, checkpoint_encoder=False):
         """Closed-loop imagination; caller owns freezing and optimizer steps."""
@@ -181,38 +244,30 @@ class Learner:
         in_episode = torch.ones_like(remaining, dtype=torch.bool)
         slip_frames = torch.zeros_like(remaining)
         ret = torch.zeros_like(remaining)
+        step_offsets = getattr(self, "_step_offsets", None)
+        if step_offsets is None:
+            step_offsets = torch.arange(1, HORIZON + 1, device=state.device)[:, None] + self.offsets[None, :]
+        step_numbers = getattr(self, "_step_numbers", None)
+        if step_numbers is None:
+            step_numbers = torch.arange(1, HORIZON + 1, dtype=torch.float32, device=state.device)
+        step_fn = getattr(self, "_compiled_imagine_step", self._imagine_step)
         for j in range(HORIZON):
             states.append(state.detach())
             goals.append(goal.detach())
             valid_rows.append(in_episode)
-            with self.autocast():
-                action = self.actor(goal, hist, checkpoint_encoder=checkpoint_encoder).float().clamp(-10, 10)
-                after, logits = self.wm(state, action, ctx)
-            after = after.float()
-            contacts = logits.float().sigmoid()
-            next_fk = self.geo.forward_kinematics(after)
             target = raw[:, j+1]
-            reward = self.geo.reward(state, after, prev, action, target, contacts,
-                                     prev_fk=fk, fk=next_fk, target_fk=target_fk[:, j]).reshape(-1)
-            # Consecutive inferred hand loss and a substantially descended box
-            # distinguish a confirmed drop from brief loss of a contact.
-            expects_hold = target[:, 37:39].mean(-1) > .5
-            lost = expects_hold & (contacts[:, 2:4].mean(-1) < .5)
-            slip_frames = torch.where(lost, slip_frames+1, 0.)
-            dropped = (slip_frames >= 3) & (after[:, 73] < target[:, 106]-.15)
-            bad_box = (after[:, 73] - target[:, 106]).abs() > .5
-            task_alive = ~(dropped | bad_box) & (remaining > j+1)
-            cont, within_boundary = self._continuation(after, target, task_alive)
-            reward = reward - self.args.drop_penalty * dropped.float()
+            raw_next_win = raw.index_select(1, step_offsets[j])
+            (after, action, next_fk, next_goal, next_hist,
+             reward, cont, within_boundary, slip_frames) = step_fn(
+                state, prev, ctx, hist, goal, fk, target, raw_next_win,
+                target_fk[:, j], slip_frames, step_numbers[j], remaining, checkpoint_encoder
+            )
             rewards.append(reward.detach())
             continuations.append(cont.detach())
             ret = ret + (GAMMA**j) * mask * reward
             mask = mask * cont
             in_episode = in_episode & within_boundary
-            obs = self.geo.observation(after, action, ctx, fk=next_fk)
-            hist = torch.cat([hist[:, 1:], obs[:, None]], dim=1)
-            state, prev, fk = after, action, next_fk
-            goal = self.reference(state, raw[:, j+1+self.offsets], fk=fk)
+            state, prev, fk, goal, hist = after, action, next_fk, next_goal, next_hist
         terminal = self._limit_return(self._value(state, goal, ctx))
         ret = ret + (GAMMA**HORIZON)*mask*terminal
         states.append(state.detach())
@@ -340,51 +395,149 @@ class Collector:
                                    np.mean([s.events[i]["drop"] for s,i in collected]))}
 
 
-@torch.no_grad()
-def validate(net, args):
-    env = CarryEnv(args.sim_root, args.motion_dir, seed=args.seed+811, split="val",
-                   cfgen_ratio=args.cfgen_ratio,
-                   cfgen_goal_noise_std_m=getattr(args, "cfgen_goal_noise_std_m", DEFAULT_CFGEN_GOAL_NOISE_STD_M))
-    results = {}
-    replay = Replay(max(65536,args.capacity), args.seed+811)
-    collector = Collector(env, net, replay, np.random.default_rng(args.seed+811))
-    for source in ("npz","cfgen"):
-        for _ in range(args.eval_episodes):
-            collector.reset(source)
-            for _ in range(2):  # One recovery attempt, separately counted and scored.
-                seg = collector.seg
-                while collector.seg is not None:
-                    collector.collect(64, stop_at_done=True)
-                if not seg.events[-1]["drop"] or seg.source=="recovery":
-                    break
-                if not getattr(env, "pending_recovery", False):
-                    break
-                collector.reset()
-                if collector.seg.source != "recovery":
-                    break
-    results.update({f"eval/{k}":v for k,v in collector.episodes.items()})
-    for source in ("npz","cfgen","recovery"):
-        n = collector.episodes[f"{source}/done"]
-        if n:
-            for key in ("success","drop"):
-                results[f"eval/{source}/{key}_rate"] = collector.episodes[f"{source}/{key}"]/n
-    from .validation import validate_dynamics, aggregate_dynamics
-    evaluated = []
-    by_source = {}
+def _init_eval_worker():
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
+    os.environ["OMP_NUM_THREADS"] = "1"
+    os.environ["MKL_NUM_THREADS"] = "1"
+    torch.set_num_threads(1)
+
+
+class _CpuEvalNet:
+    def __init__(self, sim_root, goal_mode, drop_penalty, encoder_width, decoder_width, actor_state):
+        self.device = torch.device("cpu")
+        self.geo = CarryGeometry(sim_root)
+        self.actor = Actor(first_width=encoder_width, decoder_width=decoder_width)
+        self.actor.load_state_dict(actor_state)
+        self.args = type("Args", (), {"goal_mode": goal_mode, "drop_penalty": drop_penalty})()
+
+    def autocast(self):
+        return nullcontext()
+
+    def reference(self, state, raw, fk=None):
+        goal = self.geo.reference(state, raw, fk=fk)
+        if self.args.goal_mode == "flow":
+            goal = torch.cat((goal[..., :49], torch.zeros_like(goal[..., 49:])), dim=-1)
+        return goal
+
+
+def _eval_episode_worker(spec):
+    (sim_root, motion_dir, seed, cfgen_ratio, cfgen_goal_noise_std_m,
+     goal_mode, drop_penalty, encoder_width, decoder_width, actor_state, jobs) = spec
+    env = CarryEnv(sim_root, motion_dir, seed=seed, split="val",
+                   cfgen_ratio=cfgen_ratio, cfgen_goal_noise_std_m=cfgen_goal_noise_std_m)
+    all_paths = list(env.paths)
+    net = _CpuEvalNet(sim_root, goal_mode, drop_penalty, encoder_width, decoder_width, actor_state)
+    replay = Replay(65536, seed)
+    collector = Collector(env, net, replay, np.random.default_rng(seed))
+    for source, path_idx in jobs:
+        env.paths = [all_paths[path_idx]]
+        collector.reset(source)
+        env.paths = all_paths
+        for _ in range(2):
+            seg = collector.seg
+            while collector.seg is not None:
+                collector.collect(64, stop_at_done=True)
+            if not seg.events[-1]["drop"] or seg.source == "recovery":
+                break
+            if not getattr(env, "pending_recovery", False):
+                break
+            collector.reset()
+            if collector.seg.source != "recovery":
+                break
+    segments = []
     for seg in replay.segments:
         if not len(seg):
             continue
         indices = [*seg.frames, min(seg.frames[-1] + 1, len(seg.clip) - 1)]
-        args_wm = (seg.states, seg.actions, seg.context, seg.contacts,
-                   seg.clip[indices], [x["done"] for x in seg.events])
+        segments.append((
+            seg.source,
+            np.asarray(seg.states, dtype=np.float32),
+            np.asarray(seg.actions, dtype=np.float32),
+            np.asarray(seg.context, dtype=np.float32),
+            np.asarray(seg.contacts, dtype=np.float32),
+            np.asarray(seg.clip[indices], dtype=np.float32),
+            np.asarray([x["done"] for x in seg.events], dtype=bool),
+            seg.events,
+        ))
+    return dict(collector.episodes), segments
+
+
+@torch.no_grad()
+def validate(net, args):
+    cfgen_std = getattr(args, "cfgen_goal_noise_std_m", DEFAULT_CFGEN_GOAL_NOISE_STD_M)
+    eval_workers = getattr(args, "eval_workers", 1)
+    total_episodes = 2 * args.eval_episodes
+    if eval_workers > 1 and total_episodes > 1 and hasattr(net.actor, "state_dict"):
+        all_paths = split_paths(args.motion_dir, "val")
+        env_rng = np.random.default_rng(args.seed + 811)
+        jobs = [(source, int(env_rng.integers(len(all_paths))))
+                for source in ("npz", "cfgen") for _ in range(args.eval_episodes)]
+        n_workers = min(eval_workers, len(jobs))
+        buckets = [jobs[i::n_workers] for i in range(n_workers)]
+        actor_state = {k: v.detach().cpu() for k, v in net.actor.state_dict().items()}
+        specs = [
+            (args.sim_root, args.motion_dir, args.seed + 811 + idx, args.cfgen_ratio, cfgen_std,
+             args.goal_mode, args.drop_penalty, args.encoder_width, args.decoder_width,
+             actor_state, bucket)
+            for idx, bucket in enumerate(buckets) if bucket
+        ]
+        episodes = Counter()
+        segments = []
+        ctx = mp.get_context("spawn")
+        with ProcessPoolExecutor(max_workers=len(specs), mp_context=ctx,
+                                 initializer=_init_eval_worker) as pool:
+            for ep_counts, segs in pool.map(_eval_episode_worker, specs):
+                episodes.update(ep_counts)
+                segments.extend(segs)
+    else:
+        env = CarryEnv(args.sim_root, args.motion_dir, seed=args.seed+811, split="val",
+                       cfgen_ratio=args.cfgen_ratio, cfgen_goal_noise_std_m=cfgen_std)
+        replay = Replay(max(65536, args.capacity), args.seed+811)
+        collector = Collector(env, net, replay, np.random.default_rng(args.seed+811))
+        for source in ("npz", "cfgen"):
+            for _ in range(args.eval_episodes):
+                collector.reset(source)
+                for _ in range(2):  # One recovery attempt, separately counted and scored.
+                    seg = collector.seg
+                    while collector.seg is not None:
+                        collector.collect(64, stop_at_done=True)
+                    if not seg.events[-1]["drop"] or seg.source == "recovery":
+                        break
+                    if not getattr(env, "pending_recovery", False):
+                        break
+                    collector.reset()
+                    if collector.seg.source != "recovery":
+                        break
+        episodes = collector.episodes
+        segments = []
+        for seg in replay.segments:
+            if not len(seg):
+                continue
+            indices = [*seg.frames, min(seg.frames[-1] + 1, len(seg.clip) - 1)]
+            segments.append((
+                seg.source, seg.states, seg.actions, seg.context, seg.contacts,
+                seg.clip[indices], [x["done"] for x in seg.events], seg.events,
+            ))
+
+    results = {f"eval/{k}": v for k, v in episodes.items()}
+    for source in ("npz", "cfgen", "recovery"):
+        n = episodes[f"{source}/done"]
+        if n:
+            for key in ("success", "drop"):
+                results[f"eval/{source}/{key}_rate"] = episodes[f"{source}/{key}"] / n
+    from .validation import validate_dynamics, aggregate_dynamics
+    evaluated = []
+    by_source = {}
+    for source, states, actions, context, contacts, targets, dones, events in segments:
+        args_wm = (states, actions, context, contacts, targets, dones)
         held = [tensor(np.asarray(x), net.device) for x in args_wm]
         held[-1] = held[-1].bool()
-        wm_metrics = validate_dynamics(net.wm, *held, events=seg.events)
+        wm_metrics = validate_dynamics(net.wm, *held, events=events)
         evaluated.append(wm_metrics)
-        by_source.setdefault(seg.source, []).append(wm_metrics)
-    results.update({f"eval/dynamics/{k}": v for k,v in aggregate_dynamics(evaluated).items()})
-    for source, episodes in by_source.items():
-        results.update({f"eval/{source}/dynamics/{k}": v for k,v in aggregate_dynamics(episodes).items()})
+        by_source.setdefault(source, []).append(wm_metrics)
+    results.update({f"eval/dynamics/{k}": v for k, v in aggregate_dynamics(evaluated).items()})
+    for source, ep_metrics in by_source.items():
+        results.update({f"eval/{source}/dynamics/{k}": v for k, v in aggregate_dynamics(ep_metrics).items()})
     return results
 
 

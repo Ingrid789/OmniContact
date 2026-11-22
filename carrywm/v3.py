@@ -34,10 +34,11 @@ class LearnerV3(Learner):
             states = torch.stack(states).flatten(0, 1)
             goals = torch.stack(goals).flatten(0, 1)
             contexts = ctx.expand(HORIZON+1, -1, -1).reshape(-1, ctx.shape[-1])
+            old_chunk = max(CRITIC_CHUNK, getattr(self.args, "critic_chunk", CRITIC_CHUNK))
             old = torch.cat([
-                self._value(states[i:i+CRITIC_CHUNK], goals[i:i+CRITIC_CHUNK],
-                            contexts[i:i+CRITIC_CHUNK])
-                for i in range(0, len(states), CRITIC_CHUNK)
+                self._value(states[i:i+old_chunk], goals[i:i+old_chunk],
+                            contexts[i:i+old_chunk])
+                for i in range(0, len(states), old_chunk)
             ]).reshape(HORIZON+1, count)
             targets = lambda_returns(torch.stack(rewards), old[1:],
                                      torch.stack(continuations))
@@ -114,12 +115,17 @@ class LearnerV3(Learner):
                 data, mean_return, survival = self._accumulate_actor(inputs, batch_size, microbatch)
                 break
             except torch.cuda.OutOfMemoryError:
-                if microbatch == 1 or self.device.type != "cuda":
+                if self.device.type != "cuda" or (
+                    getattr(self.args, "checkpoint_encoder", False) and microbatch == 1
+                ):
                     raise RuntimeError("Insufficient memory for a V3 actor rollout")
             opt.zero_grad(set_to_none=True)
             torch.cuda.empty_cache()
-            microbatch = max(1, microbatch // 2)
-            self.args.actor_microbatch = microbatch
+            if not getattr(self.args, "checkpoint_encoder", False):
+                self.args.checkpoint_encoder = True
+            else:
+                microbatch = max(1, microbatch // 2)
+                self.args.actor_microbatch = microbatch
 
         # An OOM after an optimizer step must never retry the whole update.
         try:
