@@ -62,8 +62,7 @@ def _check_capacity(nacon: wp.array[int], nefc: wp.array[int], pairs: wp.array[i
         wp.atomic_max(overflow, 1, nefc[w])
 
 
-@lru_cache(maxsize=256)
-def _cached_plan(root, pose, box, half, goal):
+def _make_plan(root, pose, box, half, goal):
     # Official carry IK uses deterministic inputs. Cache only the zero-noise plans.
     return generate_clip(_generator(root), *(np.asarray(x) for x in (pose, box, half, goal)))
 
@@ -89,7 +88,7 @@ class _Episode(CarryEnv):
     def _generate_reference(self, scene):
         if self.cfgen_goal_noise_std_m or self.split != "train":
             return super()._generate_reference(scene)
-        return _cached_plan(self.root, tuple(scene.frames[0,97:104]), tuple(scene.frames[0,104:111]),
+        return self.reference_plan(self.root, tuple(scene.frames[0,97:104]), tuple(scene.frames[0,104:111]),
                             tuple(self.half), tuple(self.goal))
 
     def _update_teacher_history(self):
@@ -125,6 +124,9 @@ class WarpCarryWorlds:
         self._geometry_cache = {}
         self.envs = []
         prototype.scenes = {}
+        # Each fixed training file supplies at most one initial zero-noise plan.
+        # Recovery references still use the actual live robot and box poses.
+        prototype.reference_plan = lru_cache(maxsize=len(prototype.paths))(_make_plan)
         for i in range(num_envs):
             e = copy.copy(prototype)
             e.rng = np.random.default_rng(seed+i)
