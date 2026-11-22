@@ -73,6 +73,11 @@ class UpdateScheduleTests(unittest.TestCase):
         self.assertEqual((args.wm_batch_size, args.batch_size, args.actor_microbatch),
                          (1024, 4096, 4096))
         self.assertTrue(args.checkpoint_encoder)
+        self.assertEqual(args.cfgen_goal_noise_std_m, .005)
+        without_goal_noise = args_from_cli(common + ["--cfgen-goal-noise-std-m", "0"])
+        self.assertEqual(without_goal_noise.cfgen_goal_noise_std_m, 0)
+        self.assertEqual(without_goal_noise.action_noise, .1)
+        self.assertEqual(without_goal_noise.cfgen_ratio, .1)
         old = args_from_cli(common + ["--actor-microbatch", "2048", "--no-checkpoint-encoder"])
         self.assertEqual((old.actor_microbatch, old.checkpoint_encoder), (2048, False))
         self.assertIsNone(args.resume)
@@ -95,6 +100,23 @@ class UpdateScheduleTests(unittest.TestCase):
                                   "--output-dir", str(Path(tmp, "v3")), "--resume", str(checkpoint)])
             with patch.object(train, "CarryEnv"), self.assertRaisesRegex(ValueError, "V2.*V3"):
                 train.train(args, version=3, learner_type=lambda _: tiny_learner(4))
+
+    def test_resume_keeps_logged_reference_noise_and_legacy_baseline(self):
+        from carrywm import train
+        from carrywm.train_v3 import args_from_cli
+        with TemporaryDirectory() as tmp:
+            checkpoint = Path(tmp, "v3.pt")
+            cli = ["--sim-root", ".", "--motion-dir", ".", "--device", "cpu", "--iterations", "1",
+                   "--output-dir", str(Path(tmp, "run")), "--resume", str(checkpoint)]
+            for saved, value, expected in (
+                ({"cfgen_goal_noise_std_m": 0.}, [], "--cfgen-goal-noise-std-m 0.0"),
+                ({}, ["--cfgen-goal-noise-std-m", "0"], "--cfgen-goal-noise-std-m 0.005"),
+                ({}, [], "--iterations must exceed"),
+            ):
+                with self.subTest(saved=saved, value=value):
+                    torch.save({"version": 3, "iteration": 1, "config": saved}, checkpoint)
+                    with patch.object(train, "CarryEnv"), self.assertRaisesRegex(ValueError, expected):
+                        train.train(args_from_cli(cli + value), version=3, learner_type=lambda _: tiny_learner(4))
 
     def test_warmup_uses_current_actor_and_executes_no_optimizer_updates(self):
         class Scene:

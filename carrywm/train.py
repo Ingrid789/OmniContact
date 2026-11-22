@@ -14,7 +14,7 @@ import torch
 
 from .model import Actor, Critic, WorldModel, CarryGeometry, world_loss
 from .replay import Replay, array
-from .sim import CarryEnv
+from .sim import CarryEnv, DEFAULT_CFGEN_GOAL_NOISE_STD_M
 
 
 OFFSETS = (0, 1, 2, 3, 4, 8, 12, 16, 24, 32, 50)
@@ -333,7 +333,8 @@ class Collector:
 @torch.no_grad()
 def validate(net, args):
     env = CarryEnv(args.sim_root, args.motion_dir, seed=args.seed+811, split="val",
-                   cfgen_ratio=args.cfgen_ratio)
+                   cfgen_ratio=args.cfgen_ratio,
+                   cfgen_goal_noise_std_m=getattr(args, "cfgen_goal_noise_std_m", DEFAULT_CFGEN_GOAL_NOISE_STD_M))
     results = {}
     replay = Replay(max(65536,args.capacity), args.seed+811)
     collector = Collector(env, net, replay, np.random.default_rng(args.seed+811))
@@ -409,7 +410,8 @@ def _train_locked(args, version, learner_type, wm_iteration):
     start = time.perf_counter()
     if not args.resume and any((args.output_dir / n).exists() for n in ("latest.pt","metrics.jsonl","config.json")):
         raise FileExistsError("output directory already contains a run; choose another or pass --resume")
-    env = CarryEnv(args.sim_root, args.motion_dir, seed=args.seed, split="train", cfgen_ratio=args.cfgen_ratio)
+    env = CarryEnv(args.sim_root, args.motion_dir, seed=args.seed, split="train", cfgen_ratio=args.cfgen_ratio,
+                   cfgen_goal_noise_std_m=getattr(args, "cfgen_goal_noise_std_m", DEFAULT_CFGEN_GOAL_NOISE_STD_M))
     net = learner_type(args)
     replay = Replay(args.capacity, args.seed)
     collector = Collector(env, net, replay, rng)
@@ -421,8 +423,12 @@ def _train_locked(args, version, learner_type, wm_iteration):
         saved_version = ck["version"]
         if saved_version != version:
             raise ValueError(f"Cannot resume V{saved_version} using V{version}")
-        if version == 3 and ck["iteration"] >= args.iterations:
-            raise ValueError("--iterations must exceed the saved global iteration")
+        if version == 3:
+            saved_std = ck["config"].get("cfgen_goal_noise_std_m", DEFAULT_CFGEN_GOAL_NOISE_STD_M)
+            if saved_std != args.cfgen_goal_noise_std_m:
+                raise ValueError(f"Resume this checkpoint with --cfgen-goal-noise-std-m {saved_std}")
+            if ck["iteration"] >= args.iterations:
+                raise ValueError("--iterations must exceed the saved global iteration")
         for model, state in zip(net.models,ck["models"]):
             model.load_state_dict(state)
         for opt, state in zip(net.optimizers,ck["optimizers"]):

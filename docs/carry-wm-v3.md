@@ -58,3 +58,20 @@ The monitor records device/process memory and device busy percentage in
 spent in both warmup and training. For an interrupted V3 run, use the same
 options and add `--resume "$V3_RUN/latest.pt"`. The V3 entry point accepts
 V3 checkpoints for recovery; the scratch experiment uses no resume flag.
+
+## V3 without CF-Gen reference noise
+
+The baseline adds Gaussian noise with standard deviation 0.005 m to each of the
+two horizontal coordinates of the requested box destination before generating a
+training reference. Both variants constrain that destination to the same support
+area on the table. For the no-noise experiment, use the training command above
+with a fresh output directory, seed 42 and `--cfgen-goal-noise-std-m 0`. The
+baseline setting is `--cfgen-goal-noise-std-m 0.005`.
+When resuming an interrupted no-noise run, pass `--cfgen-goal-noise-std-m 0`
+again. The trainer checks this setting against the checkpoint.
+
+Both experiments select CF-Gen for 10% of primary episodes, draw the other 90%
+from demonstrations, and use action exploration noise with standard deviation
+0.1 during real training collection and warmup. Evaluation uses deterministic
+actions and unperturbed reference goals. Compare the same evaluation iterations
+and report the NPZ and CF-Gen success counts separately.

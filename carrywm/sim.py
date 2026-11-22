@@ -13,6 +13,9 @@ import yaml
 from .data import OFFSETS, LAB2MJ, MJ2LAB, LINKS, generate_clip, load_demo, raw_window, split_paths
 
 
+DEFAULT_CFGEN_GOAL_NOISE_STD_M = 0.005
+
+
 def _matrix(quat):
     # MuJoCo and the motion archives use scalar-first quaternions.
     quat = np.asarray(quat)
@@ -67,9 +70,13 @@ def _teacher(root):
 class CarryEnv:
     """One physical simulator. step() never resets or replaces the target clip."""
 
-    def __init__(self, sim_root, motion_dir, seed=42, split="train", cfgen_ratio=.1):
+    def __init__(self, sim_root, motion_dir, seed=42, split="train", cfgen_ratio=.1,
+                 cfgen_goal_noise_std_m=DEFAULT_CFGEN_GOAL_NOISE_STD_M):
         if not 0 <= cfgen_ratio <= 1:
             raise ValueError("cfgen_ratio must be a probability")
+        if not np.isfinite(cfgen_goal_noise_std_m) or cfgen_goal_noise_std_m < 0:
+            raise ValueError("CF-Gen goal noise standard deviation must be finite and nonnegative")
+        self.cfgen_goal_noise_std_m = cfgen_goal_noise_std_m
         self.root = Path(sim_root).resolve()
         self.paths = split_paths(motion_dir, split)
         self.split, self.cfgen_ratio = split, cfgen_ratio
@@ -154,7 +161,8 @@ class CarryEnv:
                 # Use scene geometry and the requested goal. The demonstration's
                 # future poses and contacts do not condition the generator.
                 if self.split == "train":
-                    noise = self.rng.normal(0, .005, 2)
+                    # Draw at zero scale too so the ablation preserves the scene RNG stream.
+                    noise = self.rng.normal(0, self.cfgen_goal_noise_std_m, 2)
                     # Retain full footprint support on the target table.
                     reach = np.maximum(self.m.geom_size[self.tables_geom[1],:2] - np.linalg.norm(self.half[:2]), 0)
                     center = scene.tables[1,:2]

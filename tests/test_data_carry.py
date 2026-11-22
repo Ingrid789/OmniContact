@@ -1,8 +1,10 @@
 """Data and simulator regression checks, independent of Isaac Lab."""
+from dataclasses import replace
 import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 import numpy as np
 
@@ -72,6 +74,41 @@ class ReferenceTests(unittest.TestCase):
         self.assertTrue(np.isin(labels,[0,1]).all())
         self.assertFalse(info["lifted"])
         self.assertEqual(env.source,"npz")
+
+    @unittest.skipUnless(os.getenv("CARRY_SIM_ROOT"),"set CARRY_SIM_ROOT to the official MuJoCo checkout")
+    def test_only_generated_training_goals_receive_xy_noise(self):
+        from carrywm.sim import CarryEnv
+        root = Path(os.environ["CARRY_SIM_ROOT"])
+        data = root / "data/carrybox"
+        demo = load_demo(sorted(data.glob("*.npz"))[0])
+        scene = replace(demo, frames=demo.frames.copy(), half=np.array([.08, .08, .1]))
+        # Both Gaussian offsets fit on this table, so clipping cannot mask the ablation.
+        scene.frames[-1, 104:106] = scene.tables[1, :2]
+        def reset(split, source, std):
+            env = CarryEnv(root, data, seed=42, split=split, cfgen_goal_noise_std_m=std)
+            with patch("carrywm.sim.load_demo", return_value=scene), patch("carrywm.sim._generator"), \
+                    patch("carrywm.sim.generate_clip", return_value=(scene.frames, None)) as generate:
+                env.reset(source)
+                if source == "cfgen":
+                    np.testing.assert_array_equal(generate.call_args.args[-1], env.goal)
+                else:
+                    generate.assert_not_called()
+            return env.goal, env.rng.random()
+
+        nominal = scene.frames[-1, 104:107]
+        zero, next_zero = reset("train", "cfgen", 0.)
+        noisy, next_noisy = reset("train", "cfgen", .005)
+        np.testing.assert_array_equal(zero, nominal)
+        self.assertEqual(noisy[2], nominal[2])
+        self.assertFalse(np.array_equal(noisy[:2], nominal[:2]))
+        self.assertEqual(next_noisy, next_zero)
+        for split, source in (("train", "npz"), ("val", "cfgen")):
+            for std in (0., .005):
+                np.testing.assert_array_equal(reset(split, source, std)[0], nominal)
+        # A zero standard deviation still projects an infeasible target onto the support.
+        scene.frames[-1, 104] += 1.
+        bounded, _ = reset("train", "cfgen", 0.)
+        self.assertLess(bounded[0], scene.frames[-1, 104])
 
 
 if __name__ == "__main__":
