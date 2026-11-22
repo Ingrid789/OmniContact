@@ -74,10 +74,12 @@ class UpdateScheduleTests(unittest.TestCase):
                          (1024, 4096, 4096))
         self.assertTrue(args.checkpoint_encoder)
         self.assertEqual(args.cfgen_goal_noise_std_m, .005)
-        without_goal_noise = args_from_cli(common + ["--cfgen-goal-noise-std-m", "0"])
-        self.assertEqual(without_goal_noise.cfgen_goal_noise_std_m, 0)
-        self.assertEqual(without_goal_noise.action_noise, .1)
-        self.assertEqual(without_goal_noise.cfgen_ratio, .1)
+        for std in (0., .005):
+            with self.subTest(std=std):
+                experiment = args_from_cli(common + ["--cfgen-goal-noise-std-m", str(std)])
+                self.assertEqual(experiment.cfgen_goal_noise_std_m, std)
+                self.assertEqual(experiment.action_noise, .1)
+                self.assertEqual(experiment.cfgen_ratio, .1)
         old = args_from_cli(common + ["--actor-microbatch", "2048", "--no-checkpoint-encoder"])
         self.assertEqual((old.actor_microbatch, old.checkpoint_encoder), (2048, False))
         self.assertIsNone(args.resume)
@@ -109,9 +111,10 @@ class UpdateScheduleTests(unittest.TestCase):
             cli = ["--sim-root", ".", "--motion-dir", ".", "--device", "cpu", "--iterations", "1",
                    "--output-dir", str(Path(tmp, "run")), "--resume", str(checkpoint)]
             for saved, value, expected in (
-                ({"cfgen_goal_noise_std_m": 0.}, [], "--cfgen-goal-noise-std-m 0.0"),
+                ({"cfgen_goal_noise_std_m": 0.}, ["--cfgen-goal-noise-std-m", ".005"],
+                 "--cfgen-goal-noise-std-m 0.0"),
                 ({}, ["--cfgen-goal-noise-std-m", "0"], "--cfgen-goal-noise-std-m 0.005"),
-                ({}, [], "--iterations must exceed"),
+                ({}, ["--cfgen-goal-noise-std-m", ".005"], "--iterations must exceed"),
             ):
                 with self.subTest(saved=saved, value=value):
                     torch.save({"version": 3, "iteration": 1, "config": saved}, checkpoint)

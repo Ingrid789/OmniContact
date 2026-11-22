@@ -236,9 +236,13 @@ python -m carrywm.monitor --output-dir "$RUN" --gpu 0 --interval 2 -- \
 
 ## CF-Gen 无噪声对照
 
+两个实验分支可以直接使用同一条 V3 命令。在 `codex/v3-with-cfgen-noise` 上默认标准差为 0.005 m，在 `codex/v3-without-cfgen-noise` 上默认为 0 m。每个实验使用各自的输出目录。若从 `main` 启动，可显式设置下面的参数。
+
 V3 默认在训练主回合调用 CF-Gen 之前，给箱子目标落点的水平坐标各加标准差 0.005 m 的高斯扰动，然后将落点裁剪到箱底可获得桌面支撑的范围。把 `--cfgen-goal-noise-std-m` 设为 `0` 即得到 **V3 without CF-Gen noise**。这个开关控制的是送进规划器的目标。规划器基于该目标生成接触流和参考关节轨迹。两版都执行相同的桌面边界裁剪。当边界把两个候选点夹到同一位置时，两版该次规划可能相同。
 
 复现这项对照时，给上面的启动命令增加 `--cfgen-goal-noise-std-m 0`，为 `RUN` 指定单独的空目录，从种子 42 初始化并预热 4096 步。两版都用 10% CF-Gen、90% NPZ，每轮 WM、actor、critic 分别更新 10、1、20 次。MuJoCo 训练采集的 29 维动作继续使用标准差 0.1 的探索噪声，验证时关掉动作探索。比较同一轮数、相同验证种子、相同参考来源的搬箱结果。历史基线的前 400 轮采用两批 2048 后才切到单批 4096，本次对照从第一轮就采用单批 4096 和 encoder 激活重算，BF16 下两种分块方式可能有舍入差异。
+
+两组都完成第 6000 轮验证后，运行 `python scripts/compare_v3_noise.py "$WITH_NOISE_RUN" "$WITHOUT_NOISE_RUN"`。重点看 CF-Gen 参考下的真实搬箱成功数，同时核对 NPZ 成功数和各来源的掉箱数。每个来源这一轮只有 3 个任务；如差距仅为 1 个任务，应在更多配对场景中复核。[比较脚本](../scripts/compare_v3_noise.py)
 
 ## 单批 4096 的实际代价与收益
 

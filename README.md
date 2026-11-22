@@ -34,6 +34,14 @@ V3 starts from scratch with noisy on-policy replay warmup, then takes ten world-
 critic optimizer steps per collection round. The actor trains on 4096 imagined trajectories with
 encoder activation recomputation. [原版 OmniContact 到 V3 的完整改动说明（中文）](docs/omnicontact-to-v3.md) · [V3 schedule and launch](docs/carry-wm-v3.md)
 
+The V3 CF-Gen ablation has two experiment branches. Both use the same launch
+command. The checked-out branch sets the default training-goal noise.
+
+| V3 branch | Standard deviation per horizontal goal coordinate |
+|---|---:|
+| [codex/v3-with-cfgen-noise](https://github.com/Solivaman/OmniContact2SuperMimic/tree/codex/v3-with-cfgen-noise) | 0.005 m |
+| [codex/v3-without-cfgen-noise](https://github.com/Solivaman/OmniContact2SuperMimic/tree/codex/v3-without-cfgen-noise) | 0 m |
+
 > 📌 The **CF-Gen implementation and sim2sim code** are available in
 [OmniContact_sim2sim](https://github.com/Ingrid789/OmniContact_sim2sim).
 
