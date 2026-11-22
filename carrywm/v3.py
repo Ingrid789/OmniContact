@@ -24,7 +24,8 @@ class LearnerV3(Learner):
         """Accumulate this BPTT gradient and retain detached critic examples."""
         ctx = inputs[2]
         count = len(ctx)
-        ret, mask, states, goals, rewards, continuations, masks = self._rollout(inputs)
+        ret, mask, states, goals, rewards, continuations, masks = self._rollout(
+            inputs, checkpoint_encoder=getattr(self.args, "checkpoint_encoder", False))
         (-ret.sum() / effective_batch).backward()
 
         # Lambda targets use one common, pre-update critic across all microbatches.
@@ -55,7 +56,7 @@ class LearnerV3(Learner):
                 parts.append(part)
                 total_return += returns
                 surviving += alive
-        batch = CriticBatch(*(torch.cat(fields) for fields in zip(*parts)))
+        batch = parts[0] if len(parts) == 1 else CriticBatch(*(torch.cat(fields) for fields in zip(*parts)))
         return batch, total_return / batch_size, surviving / batch_size
 
     def _critic_backward(self, data, indices, chunk_size):
@@ -99,7 +100,7 @@ class LearnerV3(Learner):
     def policy_update(self, replay, batch_size):
         inputs = tuple(tensor(x, self.device) for x in replay.actor(batch_size, HORIZON))
         state, _, _, history, raw, _ = inputs
-        # Both gradient chunks must see exactly the same normalization statistics.
+        # Every trajectory in this logical batch uses the same normalization statistics.
         with torch.no_grad():
             self.actor.update_stats(self.reference(state, raw[:, self.offsets]), history)
         microbatch = min(self.args.actor_microbatch, batch_size)
@@ -130,6 +131,8 @@ class LearnerV3(Learner):
         return {"actor/return": mean_return.item(), "actor/alive32": survival.item(),
                 "actor/updates": 1, "actor/rollouts": batch_size,
                 "actor/microbatches": (batch_size + microbatch - 1) // microbatch,
-                "actor/microbatch_size": microbatch, "critic/loss": critic_loss,
+                "actor/microbatch_size": microbatch,
+                "actor/checkpoint_encoder": getattr(self.args, "checkpoint_encoder", False),
+                "critic/loss": critic_loss,
                 "critic/updates": CRITIC_EPOCHS * CRITIC_MINIBATCHES,
                 "critic/epochs": CRITIC_EPOCHS}

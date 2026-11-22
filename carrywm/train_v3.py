@@ -1,4 +1,6 @@
 """V3 training schedule for the MuJoCo carry-box world model and policy."""
+import argparse
+
 from . import train as base
 from .v3 import LearnerV3
 
@@ -23,8 +25,10 @@ def configure(parser):
     parser.description = __doc__
     parser.set_defaults(batch_size=ACTOR_BATCH, wm_batch_size=WM_BATCH,
                         warmup_steps=4096, warmup_teacher=False, wm_pretrain=0)
-    parser.add_argument("--actor-microbatch", type=int, default=2048,
+    parser.add_argument("--actor-microbatch", type=int, default=ACTOR_BATCH,
                         help="Maximum simultaneous actor graphs within the 4096-rollout update")
+    parser.add_argument("--checkpoint-encoder", action=argparse.BooleanOptionalAction, default=True,
+                        help="Recompute actor encoder activations during rollout backpropagation")
     parser.add_argument("--critic-chunk", type=int, default=32768,
                         help="Maximum valid transitions in one critic backward pass")
 

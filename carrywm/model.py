@@ -10,6 +10,7 @@ import xml.etree.ElementTree as ET
 import torch
 from torch import nn
 from torch.nn import functional as F
+from torch.utils.checkpoint import checkpoint
 import yaml
 
 
@@ -116,8 +117,14 @@ class Actor(nn.Module):
         self.goals.update(goal)
         self.observations.update(history)
 
-    def forward(self, goal, history):
-        z = self.encoder(self.goals(goal).flatten(-2)).tanh()
+    def forward(self, goal, history, *, checkpoint_encoder=False):
+        goal = self.goals(goal).flatten(-2)
+        if checkpoint_encoder and torch.is_grad_enabled():
+            # The encoder MLP is deterministic; only its activations are recomputed.
+            encoded = checkpoint(self.encoder, goal, use_reentrant=False, preserve_rng_state=False)
+        else:
+            encoded = self.encoder(goal)
+        z = encoded.tanh()
         return self.decoder(torch.cat((z, self.observations(history).flatten(-2)), -1))
 
 

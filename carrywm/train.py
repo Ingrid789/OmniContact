@@ -158,7 +158,7 @@ class Learner:
         with self.autocast():
             return self.critic(states, goals, contexts).reshape(-1).float()
 
-    def _rollout(self, inputs, *, update_stats=False):
+    def _rollout(self, inputs, *, update_stats=False, checkpoint_encoder=False):
         """Closed-loop V2/V3 imagination; caller owns freezing and optimizer steps."""
         state, prev, ctx, hist, raw, remaining = inputs
         batch_size = len(state)
@@ -177,7 +177,7 @@ class Learner:
             goals.append(goal.detach())
             weights.append(mask)
             with self.autocast():
-                action = self.actor(goal, hist).float().clamp(-10, 10)
+                action = self.actor(goal, hist, checkpoint_encoder=checkpoint_encoder).float().clamp(-10, 10)
                 after, logits = self.wm(state, action, ctx)
             after = after.float()
             contacts = logits.float().sigmoid()

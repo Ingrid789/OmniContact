@@ -13,7 +13,7 @@ from torch.nn import functional as F
 
 from carrywm.model import Actor, Critic, WorldModel
 from carrywm.replay import Replay
-from carrywm.train import Collector, HORIZON, OFFSETS, lambda_returns
+from carrywm.train import Collector, HORIZON, OFFSETS, frozen, lambda_returns
 from carrywm.v3 import CriticBatch, LearnerV3
 
 
@@ -68,9 +68,13 @@ class DeterministicReplay:
 class UpdateScheduleTests(unittest.TestCase):
     def test_production_defaults(self):
         from carrywm.train_v3 import args_from_cli
-        args = args_from_cli(["--sim-root", ".", "--motion-dir", ".", "--output-dir", "."])
+        common = ["--sim-root", ".", "--motion-dir", ".", "--output-dir", "."]
+        args = args_from_cli(common)
         self.assertEqual((args.wm_batch_size, args.batch_size, args.actor_microbatch),
-                         (1024, 4096, 2048))
+                         (1024, 4096, 4096))
+        self.assertTrue(args.checkpoint_encoder)
+        old = args_from_cli(common + ["--actor-microbatch", "2048", "--no-checkpoint-encoder"])
+        self.assertEqual((old.actor_microbatch, old.checkpoint_encoder), (2048, False))
         self.assertIsNone(args.resume)
         self.assertEqual((args.warmup_steps, args.warmup_teacher, args.wm_pretrain), (4096, False, 0))
 
@@ -177,12 +181,17 @@ class UpdateScheduleTests(unittest.TestCase):
 
     def test_critic_visits_only_valid_rows_once_per_epoch(self):
         net = tiny_learner(3)
+        # With fp32, a near-zero gradient and Adam's small epsilon can magnify
+        # GEMM rounding differences between a full and a chunked minibatch.
+        net.critic.double()
         oracle = deepcopy(net.critic)
         oracle_opt = torch.optim.Adam(oracle.parameters(), lr=.001)
         rng = torch.Generator().manual_seed(19)
         n = 21
-        batch = CriticBatch(torch.randn(n,84,generator=rng), torch.randn(n,11,113,generator=rng),
-                            torch.randn(n,16,generator=rng), torch.randn(n,generator=rng),
+        batch = CriticBatch(torch.randn(n,84,generator=rng,dtype=torch.float64),
+                            torch.randn(n,11,113,generator=rng,dtype=torch.float64),
+                            torch.randn(n,16,generator=rng,dtype=torch.float64),
+                            torch.randn(n,generator=rng,dtype=torch.float64),
                             torch.arange(n) % 6 != 0)
         net.args.critic_chunk = 2
         initial_targets = batch.targets.clone()
@@ -193,7 +202,8 @@ class UpdateScheduleTests(unittest.TestCase):
             self.assertEqual(chunk_size, 2)
             batches.append(indices.clone())
             return original(data, indices, chunk_size)
-        with patch.object(net, "_critic_backward", side_effect=check_minibatch):
+        with torch.random.fork_rng(), patch.object(net, "_critic_backward", side_effect=check_minibatch):
+            torch.manual_seed(37)
             net._fit_critic(batch)
         self.assertEqual(len(batches), 20)
         epochs = [torch.cat(batches[i:i+4]) for i in range(0,20,4)]
@@ -204,12 +214,30 @@ class UpdateScheduleTests(unittest.TestCase):
         # Oracle takes one mean squared error and one Adam step per logical minibatch.
         for rows in batches:
             oracle_opt.zero_grad(set_to_none=True)
-            values = oracle(batch.states[rows], batch.goals[rows], batch.contexts[rows])
+            # Mirror Learner._value's fp32 scalar before the fp64 MSE.
+            values = oracle(batch.states[rows], batch.goals[rows], batch.contexts[rows]).float().double()
             F.mse_loss(values, initial_targets[rows]).backward()
             torch.nn.utils.clip_grad_norm_(oracle.parameters(), 1.)
             oracle_opt.step()
         for actual, expected in zip(net.critic.parameters(), oracle.parameters()):
-            torch.testing.assert_close(actual, expected, atol=3e-6, rtol=2e-4)
+            torch.testing.assert_close(actual, expected, atol=1e-9, rtol=1e-8)
+
+    def test_encoder_recomputation_preserves_full_rollout_gradients_and_targets(self):
+        def imagine(checkpoint_encoder):
+            net = tiny_learner(4)
+            net.args.checkpoint_encoder = checkpoint_encoder
+            calls = []
+            net.actor.encoder[0].register_forward_pre_hook(lambda *args: calls.append(1))
+            inputs = DeterministicReplay().actor(4, HORIZON)
+            with frozen(net.wm, net.critic):
+                examples, returns, _ = net._imagine(inputs, 4)
+            self.assertEqual(len(calls), HORIZON * (2 if checkpoint_encoder else 1))
+            grads = {name: param.grad for name, param in net.actor.named_parameters()}
+            self.assertTrue(all(grad is not None for grad in grads.values()))
+            return grads, examples.targets, returns
+
+        baseline = imagine(False)
+        torch.testing.assert_close(imagine(True), baseline, rtol=0, atol=0)
 
 
 if __name__ == "__main__":
