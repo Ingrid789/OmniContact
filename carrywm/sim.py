@@ -27,13 +27,20 @@ def _matrix(quat):
 
 
 @lru_cache(maxsize=6)
-def _scene(root, half):
+def _scene(root, half, headless=False):
     """Compile actual collision geometry, broadphase, mass and inertia per size."""
     scene = root / "g1_description" / "omnicontact_carry_box.xml"
     xml = ET.parse(scene)
     size = " ".join(str(v) for v in half)
     for name in ("box_geom", "ghost_box_geom"):
         xml.find(f".//geom[@name='{name}']").set("size", size)
+    if headless:
+        # The reference bodies and ghost G1 are visual overlays with no contacts.
+        world = xml.find("worldbody")
+        xml.getroot().remove(xml.find("include[@file='g1_ghost.xml']"))
+        for body in list(world.findall("body")):
+            if body.get("name").startswith(("ghost_", "ref_")):
+                world.remove(body)
     i = xml.find(".//body[@name='box']/inertial")
     x, y, z = np.asarray(half) * 2
     inertia = float(i.get("mass")) / 12 * np.asarray([y*y+z*z, x*x+z*z, x*x+y*y])
@@ -93,8 +100,11 @@ class CarryEnv:
         self._done = True
 
     def _bind_scene(self, half):
-        self.m = _scene(self.root, tuple(half))
-        self.d = mj.MjData(self.m)
+        model = _scene(self.root, tuple(half))
+        self._set_scene(model, mj.MjData(model), half)
+
+    def _set_scene(self, model, data, half):
+        self.m, self.d = model, data
         self.half = np.asarray(half, dtype=float)
         self.bp = int(self.m.joint("box").qposadr[0])
         self.bv = int(self.m.joint("box").dofadr[0])
@@ -106,6 +116,16 @@ class CarryEnv:
         contact_bodies = ("left_ankle_roll_link", "right_ankle_roll_link",
                           "left_wrist_yaw_link", "right_wrist_yaw_link")
         self._limb = {self.m.body(n).id: j for j,n in enumerate(contact_bodies)}
+
+    def _forward_reset(self):
+        mj.mj_forward(self.m, self.d)
+
+    def _load_scene(self, path):
+        return load_demo(path)
+
+    def _generate_reference(self, scene):
+        return generate_clip(_generator(self.root), scene.frames[0,97:104],
+                             scene.frames[0,104:111], self.half, self.goal)
 
     def _try_recovery(self):
         """Verify the solved IK actually places both fingertips on the requested faces."""
@@ -147,7 +167,7 @@ class CarryEnv:
             if source not in {"npz", "cfgen"}:
                 raise ValueError(f"Unknown reference source {source}")
             path = self.paths[self.rng.integers(len(self.paths))]
-            scene = load_demo(path)
+            scene = self._load_scene(path)
             self._bind_scene(scene.half)
             self.source, self.name = source, path.stem
             self.episode += 1
@@ -167,8 +187,7 @@ class CarryEnv:
                     reach = np.maximum(self.m.geom_size[self.tables_geom[1],:2] - np.linalg.norm(self.half[:2]), 0)
                     center = scene.tables[1,:2]
                     self.goal[:2] = np.clip(self.goal[:2] + noise, center-reach, center+reach)
-                self.clip, self.phase = generate_clip(_generator(self.root), scene.frames[0,97:104],
-                                                       scene.frames[0,104:111], self.half, self.goal)
+                self.clip, self.phase = self._generate_reference(scene)
                 twists[:] = 0
             f = self.clip[self.index]
             self.d.qpos[:7] = f[97:104]
@@ -179,7 +198,7 @@ class CarryEnv:
             self.d.qpos[self.bp:self.bp+7] = f[104:111]
             self.d.qvel[self.bv:self.bv+3] = twists[2]
             self.d.qvel[self.bv+3:self.bv+6] = _matrix(f[107:111]).T @ twists[3]
-            mj.mj_forward(self.m, self.d)
+            self._forward_reset()
         self.context = np.concatenate((self.half, self.m.body("box").mass,
                                        self.m.body("box").inertia, self.m.geom_friction[self.box_geom],
                                        self.d.mocap_pos[self.table_ids].ravel())).astype(np.float32)
@@ -275,11 +294,14 @@ class CarryEnv:
             self.d.ctrl[:] = np.clip(tau,-self.limit,self.limit)
             mj.mj_step(self.m,self.d)
         mj.mj_forward(self.m,self.d)
+        return self._finish_step(action, self._contact())
+
+    def _finish_step(self, action, contacts):
         self.last_action = action.copy()
         self.index = min(self.index+1,len(self.clip)-1)
         self._update_teacher_history()
         state = self.state
-        labels, ground, dest, origin = self._contact()
+        labels, ground, dest, origin = contacts
         hand = labels[2:4].any()
         # A box on its original support before grasp is not a dropped box.
         displacement = state[71:74] - self._initial_box

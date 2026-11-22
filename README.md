@@ -42,6 +42,8 @@ command. The checked-out branch sets the default training-goal noise.
 | [codex/v3-with-cfgen-noise](https://github.com/Solivaman/OmniContact2SuperMimic/tree/codex/v3-with-cfgen-noise) | 0.005 m |
 | [codex/v3-without-cfgen-noise](https://github.com/Solivaman/OmniContact2SuperMimic/tree/codex/v3-without-cfgen-noise) | 0 m |
 
+V4 trains on 1024 MuJoCo Warp worlds with a replay ratio of 16 and 2048 imagined actor trajectories per update. [V4 采集、训练和启动说明](docs/carry-wm-v4.md)
+
 > 📌 The **CF-Gen implementation and sim2sim code** are available in
 [OmniContact_sim2sim](https://github.com/Ingrid789/OmniContact_sim2sim).
 
