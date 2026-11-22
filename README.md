@@ -25,6 +25,11 @@ flow for long-horizon tasks. **CFgen** generates task-space references, while
 This repository provides **CFtrack training in Isaac Lab** for the Unitree G1,
 with MLP or Transformer policies.
 
+The carry-box V2 trainer uses MuJoCo for collection and a differentiable
+robot-and-box world model for policy updates. It accepts NPZ demonstrations
+and CF-Gen plans through the same 113-feature reference interface.
+[Training, evaluation and GPU measurements](docs/carry-wm-v2.md)
+
 > 📌 The **CF-Gen implementation and sim2sim code** are available in
 [OmniContact_sim2sim](https://github.com/Ingrid789/OmniContact_sim2sim).
 
