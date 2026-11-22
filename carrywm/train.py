@@ -24,7 +24,7 @@ GAMMA = 0.99
 LAMBDA = 0.95
 
 
-def args_from_cli(argv=None):
+def args_from_cli(argv=None, *, configure=None):
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--sim-root", required=True, type=Path)
     p.add_argument("--motion-dir", required=True, type=Path)
@@ -58,6 +58,8 @@ def args_from_cli(argv=None):
     p.add_argument("--eval-episodes", type=int, default=1, help="per primary reference source")
     p.add_argument("--save-every", type=int, default=100)
     p.add_argument("--log-every", type=int, default=10)
+    if configure is not None:
+        configure(p)
     a = p.parse_args(argv)
     for key in ("iterations", "batch_size", "wm_batch_size", "max_batch_size",
                 "collect_steps", "capacity", "encoder_width", "decoder_width",
@@ -156,58 +158,67 @@ class Learner:
         with self.autocast():
             return self.critic(states, goals, contexts).reshape(-1).float()
 
-    def policy_update(self, replay, batch_size):
-        state, prev, ctx, hist, raw, remaining = (
-            tensor(v, self.device) for v in replay.actor(batch_size, HORIZON))
+    def _rollout(self, inputs, *, update_stats=False):
+        """Closed-loop V2/V3 imagination; caller owns freezing and optimizer steps."""
+        state, prev, ctx, hist, raw, remaining = inputs
+        batch_size = len(state)
         target_fk = self.geo.fk_from_target(raw[:, 1:HORIZON+1].reshape(-1, 111))
         target_fk = target_fk.reshape(batch_size, HORIZON, *target_fk.shape[1:])
         fk = self.geo.forward_kinematics(state)
         goal = self.reference(state, raw[:, self.offsets], fk=fk)
-        self.actor.update_stats(goal.detach(), hist)
+        if update_stats:
+            self.actor.update_stats(goal.detach(), hist)
         states, goals, rewards, continuations, weights = [], [], [], [], []
         mask = torch.ones_like(remaining)
         slip_frames = torch.zeros_like(remaining)
         ret = torch.zeros_like(remaining)
+        for j in range(HORIZON):
+            states.append(state.detach())
+            goals.append(goal.detach())
+            weights.append(mask)
+            with self.autocast():
+                action = self.actor(goal, hist).float().clamp(-10, 10)
+                after, logits = self.wm(state, action, ctx)
+            after = after.float()
+            contacts = logits.float().sigmoid()
+            next_fk = self.geo.forward_kinematics(after)
+            target = raw[:, j+1]
+            reward = self.geo.reward(state, after, prev, action, target, contacts,
+                                     prev_fk=fk, fk=next_fk, target_fk=target_fk[:, j]).reshape(-1)
+            # Consecutive inferred hand loss and a substantially descended box
+            # distinguish a confirmed drop from brief loss of a contact.
+            expects_hold = target[:, 37:39].mean(-1) > .5
+            lost = expects_hold & (contacts[:, 2:4].mean(-1) < .5)
+            slip_frames = torch.where(lost, slip_frames+1, 0.)
+            dropped = (slip_frames >= 3) & (after[:, 73] < target[:, 106]-.15)
+            fallen = (after[:, 2] - target[:, 99]).abs() > .5
+            bad_box = (after[:, 73] - target[:, 106]).abs() > .5
+            cont = (~(dropped | fallen | bad_box) & (remaining > j+1)).float()
+            reward = reward - self.args.drop_penalty * dropped.float()
+            rewards.append(reward.detach())
+            continuations.append(cont)
+            ret = ret + (GAMMA**j) * mask * reward
+            mask = mask * cont
+            obs = self.geo.observation(after, action, ctx, fk=next_fk)
+            hist = torch.cat([hist[:, 1:], obs[:, None]], dim=1)
+            state, prev, fk = after, action, next_fk
+            goal = self.reference(state, raw[:, j+1+self.offsets], fk=fk)
+        terminal = self._value(state, goal, ctx)
+        ret = ret + (GAMMA**HORIZON)*mask*terminal
+        states.append(state.detach())
+        goals.append(goal.detach())
+        return ret, mask, states, goals, rewards, continuations, weights
+
+    def policy_update(self, replay, batch_size):
+        inputs = tuple(tensor(v, self.device) for v in replay.actor(batch_size, HORIZON))
+        ctx = inputs[2]
         with frozen(self.wm, self.critic):
-            for j in range(HORIZON):
-                states.append(state.detach())
-                goals.append(goal.detach())
-                weights.append(mask)
-                with self.autocast():
-                    action = self.actor(goal, hist).float().clamp(-10, 10)
-                    after, logits = self.wm(state, action, ctx)
-                after = after.float()
-                contacts = logits.float().sigmoid()
-                next_fk = self.geo.forward_kinematics(after)
-                target = raw[:, j+1]
-                reward = self.geo.reward(state, after, prev, action, target, contacts,
-                                         prev_fk=fk, fk=next_fk, target_fk=target_fk[:, j]).reshape(-1)
-                # Consecutive inferred hand loss and a substantially descended box
-                # distinguish a confirmed drop from brief loss of a contact.
-                expects_hold = target[:, 37:39].mean(-1) > .5
-                lost = expects_hold & (contacts[:, 2:4].mean(-1) < .5)
-                slip_frames = torch.where(lost, slip_frames+1, 0.)
-                dropped = (slip_frames >= 3) & (after[:, 73] < target[:, 106]-.15)
-                fallen = (after[:, 2] - target[:, 99]).abs() > .5
-                bad_box = (after[:, 73] - target[:, 106]).abs() > .5
-                cont = (~(dropped | fallen | bad_box) & (remaining > j+1)).float()
-                reward = reward - self.args.drop_penalty * dropped.float()
-                rewards.append(reward.detach())
-                continuations.append(cont)
-                ret = ret + (GAMMA**j) * mask * reward
-                mask = mask * cont
-                obs = self.geo.observation(after, action, ctx, fk=next_fk)
-                hist = torch.cat([hist[:, 1:], obs[:, None]], dim=1)
-                state, prev, fk = after, action, next_fk
-                goal = self.reference(state, raw[:, j+1+self.offsets], fk=fk)
-            terminal = self._value(state, goal, ctx)
-            ret = ret + (GAMMA**HORIZON)*mask*terminal
+            ret, mask, states, goals, rewards, continuations, weights = self._rollout(
+                inputs, update_stats=True)
             self.optimizers[1].zero_grad(set_to_none=True)
             (-ret.mean()).backward()
             torch.nn.utils.clip_grad_norm_(self.actor.parameters(), 1., error_if_nonfinite=True)
         # Critic targets are fixed before any critic update; use detached rollouts.
-        states.append(state.detach())
-        goals.append(goal.detach())
         contexts = ctx.expand(HORIZON+1, -1, -1).reshape(-1, ctx.shape[-1])
         sf = torch.stack(states).flatten(0, 1)
         gf = torch.stack(goals).flatten(0, 1)
@@ -254,7 +265,7 @@ class Collector:
         self.episodes[f"{self.env.source}/started"] += 1
 
     @torch.no_grad()
-    def collect(self, n, teacher_prob=0., noise=0., stop_at_done=False):
+    def collect(self, n, teacher_prob=0., noise=0., stop_at_done=False, update_normalizers=False):
         geo, device = self.net.geo, self.net.device
         collected = []
         teacher_count = 0
@@ -269,12 +280,14 @@ class Collector:
                 self.hist = obs[:, None].expand(-1, 10, -1).clone()
             else:
                 self.hist = torch.cat((self.hist[:, 1:], obs[:, None]), dim=1)
-            if teacher_prob > 0 and self.rng.random() < teacher_prob:
+            using_teacher = teacher_prob > 0 and self.rng.random() < teacher_prob
+            if not using_teacher or update_normalizers:
+                idx = np.minimum(frame+np.asarray(OFFSETS), len(seg.clip)-1)
+                goal = self.net.reference(state, tensor(seg.clip[idx], device)[None])
+            if using_teacher:
                 action = array(e.teacher_action())
                 teacher_count += 1
             else:
-                idx = np.minimum(frame+np.asarray(OFFSETS), len(seg.clip)-1)
-                goal = self.net.reference(state, tensor(seg.clip[idx], device)[None])
                 with self.net.autocast():
                     action = self.net.actor(goal, self.hist)[0].float().cpu().numpy()
             if noise:
@@ -282,6 +295,10 @@ class Collector:
             action = np.clip(action, -10, 10).astype(np.float32)
             after, contact, done, info = e.step(action)
             action = array(info.get("executed_action", action))
+            if update_normalizers:
+                # Real executed transitions seed the first imagined update.
+                self.net.actor.update_stats(goal, self.hist)
+                self.net.wm.update_stats(state, tensor(action, device)[None], ctx)
             ev = {k: bool(info.get(k, False)) for k in ("success", "drop", "timeout", "recovered", "fallen")}
             ev.update({k: bool(info.get(k, False)) for k in ("grounded", "supported", "lifted")})
             ev["done"] = bool(done)
@@ -369,7 +386,14 @@ def atomic_save(payload, path):
     tmp.replace(path)
 
 
-def train(args):
+def train(args, *, version=2, learner_type=Learner, wm_iteration=None):
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    with (args.output_dir / "run.lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return _train_locked(args, version, learner_type, wm_iteration)
+
+
+def _train_locked(args, version, learner_type, wm_iteration):
     device = torch.device(args.device)
     gpu = device.type=="cuda"
     if gpu:
@@ -383,13 +407,10 @@ def train(args):
     random.seed(args.seed)
     rng = np.random.default_rng(args.seed)
     start = time.perf_counter()
-    args.output_dir.mkdir(parents=True,exist_ok=True)
-    lock = (args.output_dir/"run.lock").open("a")
-    fcntl.flock(lock,fcntl.LOCK_EX | fcntl.LOCK_NB)
     if not args.resume and any((args.output_dir / n).exists() for n in ("latest.pt","metrics.jsonl","config.json")):
         raise FileExistsError("output directory already contains a run; choose another or pass --resume")
     env = CarryEnv(args.sim_root, args.motion_dir, seed=args.seed, split="train", cfgen_ratio=args.cfgen_ratio)
-    net = Learner(args)
+    net = learner_type(args)
     replay = Replay(args.capacity, args.seed)
     collector = Collector(env, net, replay, rng)
     first, elapsed, old_steps = 1, 0., 0
@@ -397,13 +418,19 @@ def train(args):
     peak_alloc = peak_reserved = 0
     if args.resume:
         ck = torch.load(args.resume, map_location="cpu", weights_only=False)
+        saved_version = ck["version"]
+        if saved_version != version:
+            raise ValueError(f"Cannot resume V{saved_version} using V{version}")
+        if version == 3 and ck["iteration"] >= args.iterations:
+            raise ValueError("--iterations must exceed the saved global iteration")
         for model, state in zip(net.models,ck["models"]):
             model.load_state_dict(state)
         for opt, state in zip(net.optimizers,ck["optimizers"]):
             opt.load_state_dict(state)
         replay = collector.replay = ck["replay"]
         first,elapsed,old_steps = ck["iteration"]+1,ck["elapsed"],ck["real_steps"]
-        batch,wm_batch = ck["batch"],ck["wm_batch"]
+        if version == 2:
+            batch,wm_batch = ck["batch"],ck["wm_batch"]
         collector.episodes.update(ck["episodes"])
         rng.bit_generator.state = ck["rng"]
         torch.set_rng_state(ck["torch_rng"])
@@ -416,6 +443,7 @@ def train(args):
     config = {k:str(v) if isinstance(v,Path) else v for k,v in vars(args).items()}
     config["hardware"] = torch.cuda.get_device_name(device) if gpu else str(device)
     config["torch"] = str(torch.__version__)
+    config["version"] = version
     (args.output_dir/("resume-config.json" if args.resume else "config.json")).write_text(
         json.dumps(config,indent=2)+"\n",encoding="utf-8")
     def record(data):
@@ -424,7 +452,8 @@ def train(args):
             log.write(msg+"\n")
         print(msg,flush=True)
     def save(iteration):
-        atomic_save(dict(version=2, iteration=iteration,elapsed=elapsed+time.perf_counter()-start,
+        atomic_save(dict(version=version,
+                         iteration=iteration,elapsed=elapsed+time.perf_counter()-start,
                          real_steps=collector.steps+old_steps,batch=batch,wm_batch=wm_batch,
                          models=[m.state_dict() for m in net.models],
                          optimizers=[o.state_dict() for o in net.optimizers],replay=replay,
@@ -437,12 +466,18 @@ def train(args):
         todo=args.warmup_steps
         while todo:
             n=min(todo,128)
-            collector.collect(n,float(args.warmup_teacher),args.action_noise)
+            collector.collect(n,float(args.warmup_teacher),args.action_noise,
+                              update_normalizers=version == 3)
             todo-=n
+        if version == 3 and not any(len(s) >= WM_STEPS for s in replay.segments):
+            raise RuntimeError("Warmup did not produce an eight-step window; inspect reset conditions")
         for _ in range(args.wm_pretrain):
             net.wm_update(replay,wm_batch)
         sync(device)
-        record({"stage":"warmup","real_steps":collector.steps,"seconds":time.perf_counter()-start})
+        record({"stage":"warmup","real_steps":collector.steps,"seconds":time.perf_counter()-start,
+                "warmup/teacher":args.warmup_teacher, "warmup/wm_updates":args.wm_pretrain,
+                "warmup/actor_updates":0, "warmup/critic_updates":0,
+                "warmup/valid_windows":sum(max(0,len(s)-WM_STEPS+1) for s in replay.segments)})
     for it in range(first,args.iterations+1):
         sync(device)
         tick=time.perf_counter()
@@ -451,7 +486,10 @@ def train(args):
         stats = collector.collect(args.collect_steps,args.teacher_probability,args.action_noise)
         sync(device)
         after_collect=time.perf_counter()
-        stats.update(net.wm_update(replay,wm_batch))
+        if wm_iteration is None:
+            stats.update(net.wm_update(replay,wm_batch))
+        else:
+            stats.update(wm_iteration(net,replay,wm_batch))
         sync(device)
         after_wm=time.perf_counter()
         while True:
@@ -490,7 +528,7 @@ def train(args):
                     batch=max(batch,new)
         if args.eval_every and (it%args.eval_every==0 or it==args.iterations):
             stats.update(validate(net,args))
-        if it%args.save_every==0 or it==args.iterations:
+        if it%args.save_every==0 or it==args.iterations or (version==3 and it==first):
             save(it)
         if it%args.log_every==0 or it in (first,args.iterations) or (
             args.eval_every and it%args.eval_every==0):
@@ -504,7 +542,6 @@ def train(args):
              "peak_reserved_bytes":peak_reserved,"hardware":config["hardware"]}
     (args.output_dir/"summary.json").write_text(json.dumps(summary,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(summary),flush=True)
-    lock.close()
 
 
 if __name__=="__main__":

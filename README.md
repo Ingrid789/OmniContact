@@ -30,6 +30,9 @@ robot-and-box world model for policy updates. It accepts NPZ demonstrations
 and CF-Gen plans through the same 113-feature reference interface.
 [Training, evaluation and GPU measurements](docs/carry-wm-v2.md)
 
+V3 starts from scratch with noisy on-policy replay warmup, then takes ten world-model, one actor and twenty
+critic optimizer steps per collection round. [V3 schedule and launch](docs/carry-wm-v3.md)
+
 > 📌 The **CF-Gen implementation and sim2sim code** are available in
 [OmniContact_sim2sim](https://github.com/Ingrid789/OmniContact_sim2sim).
 
